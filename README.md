@@ -19,6 +19,19 @@ A working full-stack foundation for a guided 12-week music school.
 Node.js 24 or newer is recommended because this project uses the built-in
 `node:sqlite` module.
 
+On Windows, double-click:
+
+```text
+00_START_MUSIC_SCHOOL_OTS.cmd
+```
+
+This starts the backend and opens the Student App automatically. You can also
+open `01_OPEN_MUSIC_SCHOOL_OTS.html` for Student and Admin buttons.
+
+Do not open `icon.svg`; it is only the application logo.
+
+Or start the server manually:
+
 ```powershell
 node server.mjs
 ```

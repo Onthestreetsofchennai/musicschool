@@ -1,351 +1,445 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111426">
-  <title>OTS Admin | Student Analysis</title>
-  <link rel="stylesheet" href="admin.css">
-</head>
-<body>
-  <div class="admin-login" id="admin-login">
-    <section class="login-card">
-      <div class="admin-brand">
-        <span class="brand-mark">OTS</span>
-        <span>
-          <strong>MUSIC SCHOOL</strong>
-          <small>Academic operations</small>
-        </span>
-      </div>
-      <div class="login-copy">
-        <p class="eyebrow">ADMIN PORTAL</p>
-        <h1>Student analysis and teacher operations.</h1>
-        <p>Monitor practice consistency, attendance, skill improvement, feedback application and intervention alerts.</p>
-      </div>
-      <form id="login-form" class="admin-form">
-        <label>
-          Email
-          <input id="login-email" type="email" value="admin@ots.test" autocomplete="username" required>
-        </label>
-        <label>
-          Password
-          <input id="login-password" type="password" value="otsadmin123" autocomplete="current-password" required>
-        </label>
-        <button class="admin-button primary large" type="submit">Sign in</button>
-        <p class="form-error" id="login-error" hidden></p>
-      </form>
-      <div class="demo-credentials">
-        <strong>Demo accounts</strong>
-        <span>Admin: admin@ots.test / otsadmin123</span>
-        <span>Teacher: arjun@ots.test / teacher123</span>
-      </div>
-    </section>
-  </div>
+const ADMIN_TOKEN_KEY = "otsAdminToken";
 
-  <div class="admin-shell" id="admin-shell" hidden>
-    <aside class="admin-sidebar">
-      <div class="admin-brand">
-        <span class="brand-mark">OTS</span>
-        <span>
-          <strong>MUSIC SCHOOL</strong>
-          <small>Academic operations</small>
-        </span>
-      </div>
+let adminToken = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
+let adminUser = null;
+let dashboardData = null;
+let toastTimer;
 
-      <nav class="admin-nav">
-        <button class="admin-nav-item is-active" data-admin-view="dashboard">
-          <span class="nav-symbol">⌂</span>
-          Dashboard
-        </button>
-        <button class="admin-nav-item" data-admin-view="students">
-          <span class="nav-symbol">◎</span>
-          Students
-        </button>
-        <button class="admin-nav-item" data-admin-view="reviews">
-          <span class="nav-symbol">▶</span>
-          Review queue
-          <span class="nav-count" id="nav-review-count">0</span>
-        </button>
-        <button class="admin-nav-item" data-admin-view="alerts">
-          <span class="nav-symbol">!</span>
-          Alerts
-          <span class="nav-count danger" id="nav-alert-count">0</span>
-        </button>
-      </nav>
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-      <div class="admin-sidebar-footer">
-        <span class="online-dot"></span>
-        <div>
-          <strong>Backend connected</strong>
-          <small>SQLite operational database</small>
+function formatDateTime(value) {
+  if (!value) return "Not scheduled";
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function showToast(message) {
+  const toast = document.querySelector("#admin-toast");
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
+}
+
+async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (adminToken) headers.Authorization = `Bearer ${adminToken}`;
+  const response = await fetch(path, { ...options, headers });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401 && path !== "/api/auth/login") logout(false);
+    throw new Error(payload.error || `Request failed with status ${response.status}`);
+  }
+  return payload;
+}
+
+function setLoggedIn(loggedIn) {
+  document.querySelector("#admin-login").hidden = loggedIn;
+  document.querySelector("#admin-shell").hidden = !loggedIn;
+}
+
+function logout(showMessage = true) {
+  adminToken = "";
+  adminUser = null;
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  setLoggedIn(false);
+  if (showMessage) showToast("Signed out.");
+}
+
+function navigateAdmin(viewName) {
+  document.querySelectorAll(".admin-view").forEach((view) => {
+    view.classList.toggle("is-active", view.id === `admin-view-${viewName}`);
+  });
+  document.querySelectorAll(".admin-nav-item").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.adminView === viewName);
+  });
+  const activeView = document.querySelector(`#admin-view-${viewName}`);
+  document.querySelector("#admin-page-title").textContent = activeView?.dataset.title || "OTS Admin";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  if (viewName === "students") loadStudents();
+  if (viewName === "reviews") loadReviews();
+  if (viewName === "alerts") loadAlerts();
+}
+
+function statusBadge(status, score) {
+  return `<span class="score-badge ${escapeHtml(status)}">${escapeHtml(status)} · ${Math.round(score || 0)}</span>`;
+}
+
+function initials(name) {
+  return String(name || "OTS").split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+async function loadDashboard() {
+  dashboardData = await api("/api/dashboard");
+  const summary = dashboardData.summary;
+  const attention = Number(summary.amber_students || 0) + Number(summary.red_students || 0);
+  const active = Number(summary.active_students || 0);
+
+  document.querySelector("#metric-active-students").textContent = active;
+  document.querySelector("#metric-attention-students").textContent = attention;
+  document.querySelector("#metric-pending-reviews").textContent = summary.pending_reviews;
+  document.querySelector("#metric-average-score").textContent = Math.round(summary.average_score || 0);
+  document.querySelector("#nav-review-count").textContent = summary.pending_reviews;
+  document.querySelector("#nav-alert-count").textContent = summary.open_alerts;
+  document.querySelector("#service-open-alerts").textContent = summary.open_alerts;
+  document.querySelector("#service-today-sessions").textContent = summary.todays_sessions;
+  document.querySelector("#service-review-hours").textContent = `${summary.review_turnaround_hours || 0}h`;
+
+  const distribution = [
+    ["green", Number(summary.green_students || 0)],
+    ["amber", Number(summary.amber_students || 0)],
+    ["red", Number(summary.red_students || 0)]
+  ];
+  distribution.forEach(([status, count]) => {
+    document.querySelector(`#${status}-count`).textContent = count;
+    document.querySelector(`#${status}-distribution`).style.width = `${active ? (count / active) * 100 : 0}%`;
+  });
+
+  document.querySelector("#attention-students-body").innerHTML = dashboardData.attentionStudents.map((student) => `
+    <tr>
+      <td>
+        <div class="student-cell">
+          <span class="table-avatar">${initials(student.name)}</span>
+          <span><strong>${escapeHtml(student.name)}</strong><small>${escapeHtml(student.instrument)}</small></span>
         </div>
-      </div>
-    </aside>
+      </td>
+      <td>Week ${student.current_week} of 12</td>
+      <td>${escapeHtml(student.teacher_name)}</td>
+      <td>${statusBadge(student.status, student.overall_score)}</td>
+      <td>${student.alert_count}</td>
+      <td><button class="row-action open-student" data-student-id="${student.id}">Open</button></td>
+    </tr>
+  `).join("");
 
-    <div class="admin-main-column">
-      <header class="admin-topbar">
-        <div>
-          <p class="eyebrow" id="admin-date-label">MONDAY, 15 JUNE</p>
-          <h2 id="admin-page-title">Academic overview</h2>
-        </div>
-        <div class="admin-user">
-          <div>
-            <strong id="admin-user-name">OTS Admin</strong>
-            <small id="admin-user-role">Super admin</small>
+  document.querySelector("#upcoming-session-grid").innerHTML = dashboardData.upcomingSessions.length
+    ? dashboardData.upcomingSessions.map((session) => `
+      <article class="upcoming-card">
+        <span>${formatDateTime(session.scheduled_at)}</span>
+        <strong>${escapeHtml(session.student_name)}</strong>
+        <small>${escapeHtml(session.topic)} · ${escapeHtml(session.teacher_name)}</small>
+      </article>
+    `).join("")
+    : '<div class="empty-state">No upcoming sessions.</div>';
+}
+
+async function loadStudents() {
+  const search = document.querySelector("#student-search").value.trim();
+  const status = document.querySelector("#student-status-filter").value;
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (status) params.set("status", status);
+  const data = await api(`/api/students?${params.toString()}`);
+
+  document.querySelector("#students-table-body").innerHTML = data.students.length
+    ? data.students.map((student) => `
+      <tr>
+        <td>
+          <div class="student-cell">
+            <span class="table-avatar">${initials(student.name)}</span>
+            <span><strong>${escapeHtml(student.name)}</strong><small>${escapeHtml(student.instrument)}</small></span>
           </div>
-          <span class="admin-avatar" id="admin-avatar">OA</span>
-          <button class="logout-button" id="logout-button">Sign out</button>
-        </div>
-      </header>
+        </td>
+        <td>${escapeHtml(student.teacher_name)}</td>
+        <td>${student.current_week}/12</td>
+        <td>${scoreBar(student.practice_score)}</td>
+        <td>${scoreBar(student.attendance_score)}</td>
+        <td>${scoreBar(student.skill_score)}</td>
+        <td>${statusBadge(student.status, student.overall_score)}</td>
+        <td><button class="row-action open-student" data-student-id="${student.id}">Open 360°</button></td>
+      </tr>
+    `).join("")
+    : '<tr><td colspan="8"><div class="empty-state">No students match these filters.</div></td></tr>';
+}
 
-      <main class="admin-main">
-        <section class="admin-view is-active" id="admin-view-dashboard" data-title="Academic overview">
-          <div class="admin-page-intro">
-            <div>
-              <p class="eyebrow">STUDENT HEALTH</p>
-              <h1>Know who is progressing and who needs help.</h1>
-              <p>Scores combine practice consistency, attendance, skill improvement and application of teacher feedback.</p>
-            </div>
-            <button class="admin-button secondary" id="refresh-dashboard">Refresh data</button>
-          </div>
+function scoreBar(score) {
+  const value = Math.round(score || 0);
+  return `<div class="score-cell"><div class="mini-track"><span style="width:${value}%"></span></div><strong>${value}</strong></div>`;
+}
 
-          <div class="metric-grid">
-            <article class="metric-card">
-              <span class="metric-label">Active students</span>
-              <strong id="metric-active-students">0</strong>
-              <small>Across all 12-week courses</small>
-            </article>
-            <article class="metric-card">
-              <span class="metric-label">Need attention</span>
-              <strong id="metric-attention-students">0</strong>
-              <small>Amber or red status</small>
-            </article>
-            <article class="metric-card">
-              <span class="metric-label">Videos awaiting review</span>
-              <strong id="metric-pending-reviews">0</strong>
-              <small>Oldest reviews appear first</small>
-            </article>
-            <article class="metric-card">
-              <span class="metric-label">Average student score</span>
-              <strong id="metric-average-score">0</strong>
-              <small>Weighted score out of 100</small>
-            </article>
-          </div>
+async function openStudent(studentId) {
+  const data = await api(`/api/students/${studentId}`);
+  const student = data.student;
+  const skills = data.latestSkills || {};
+  const scoreCards = [
+    ["Practice consistency", student.practice_score],
+    ["Session attendance", student.attendance_score],
+    ["Skill improvement", student.skill_score],
+    ["Feedback applied", student.feedback_score]
+  ];
 
-          <div class="overview-grid">
-            <section class="admin-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">PORTFOLIO STATUS</p>
-                  <h2>Risk distribution</h2>
-                </div>
-              </div>
-              <div class="distribution-list">
-                <div class="distribution-row">
-                  <span class="status-pill green">Green</span>
-                  <div class="distribution-track"><span class="green-fill" id="green-distribution"></span></div>
-                  <strong id="green-count">0</strong>
-                </div>
-                <div class="distribution-row">
-                  <span class="status-pill amber">Amber</span>
-                  <div class="distribution-track"><span class="amber-fill" id="amber-distribution"></span></div>
-                  <strong id="amber-count">0</strong>
-                </div>
-                <div class="distribution-row">
-                  <span class="status-pill red">Red</span>
-                  <div class="distribution-track"><span class="red-fill" id="red-distribution"></span></div>
-                  <strong id="red-count">0</strong>
-                </div>
-              </div>
-              <div class="score-formula">
-                <strong>Weighted student score</strong>
-                <span>Practice 35% · Attendance 25% · Skills 25% · Feedback application 15%</span>
-              </div>
-            </section>
+  const skillNames = ["rhythm", "accuracy", "technique", "posture", "musicality", "confidence"];
+  const alertsHtml = data.alerts.length
+    ? data.alerts.map((alert) => `<div class="detail-list-row"><span>${escapeHtml(alert.title)}</span><strong>${escapeHtml(alert.severity)}</strong></div>`).join("")
+    : '<p class="empty-state">No active alerts.</p>';
 
-            <section class="admin-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">OPERATIONS</p>
-                  <h2>Service health</h2>
-                </div>
-              </div>
-              <div class="service-list">
-                <div><span>Open alerts</span><strong id="service-open-alerts">0</strong></div>
-                <div><span>Today's sessions</span><strong id="service-today-sessions">0</strong></div>
-                <div><span>Average review time</span><strong id="service-review-hours">0h</strong></div>
-              </div>
-            </section>
-          </div>
-
-          <section class="admin-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">PRIORITY LIST</p>
-                <h2>Students needing attention</h2>
-              </div>
-              <button class="text-action" data-admin-view="students">View all students</button>
-            </div>
-            <div class="table-wrap">
-              <table class="admin-table">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Course</th>
-                    <th>Teacher</th>
-                    <th>Score</th>
-                    <th>Alerts</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="attention-students-body"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <section class="admin-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">UPCOMING</p>
-                <h2>Live sessions</h2>
-              </div>
-            </div>
-            <div class="upcoming-session-grid" id="upcoming-session-grid"></div>
-          </section>
-        </section>
-
-        <section class="admin-view" id="admin-view-students" data-title="Student analysis">
-          <div class="admin-page-intro compact">
-            <div>
-              <p class="eyebrow">STUDENT 360</p>
-              <h1>Student analysis</h1>
-              <p>Filter the portfolio, compare score components and open a complete student record.</p>
-            </div>
-          </div>
-
-          <section class="admin-panel filters-panel">
-            <label class="search-field">
-              <span>Search</span>
-              <input id="student-search" type="search" placeholder="Student, teacher or instrument">
-            </label>
-            <label>
-              Status
-              <select id="student-status-filter">
-                <option value="">All statuses</option>
-                <option value="green">Green</option>
-                <option value="amber">Amber</option>
-                <option value="red">Red</option>
-              </select>
-            </label>
-            <button class="admin-button secondary" id="apply-student-filters">Apply filters</button>
-          </section>
-
-          <section class="admin-panel">
-            <div class="table-wrap">
-              <table class="admin-table student-table">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Teacher</th>
-                    <th>Week</th>
-                    <th>Practice</th>
-                    <th>Attendance</th>
-                    <th>Skills</th>
-                    <th>Overall</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="students-table-body"></tbody>
-              </table>
-            </div>
-          </section>
-        </section>
-
-        <section class="admin-view" id="admin-view-reviews" data-title="Teacher review queue">
-          <div class="admin-page-intro compact">
-            <div>
-              <p class="eyebrow">TEACHER WORKFLOW</p>
-              <h1>Practice review queue</h1>
-              <p>Review the oldest submissions first, score skills and define the student's next practice focus.</p>
-            </div>
-            <span class="queue-sla">Target: within 12 hours</span>
-          </div>
-          <div class="review-queue" id="review-queue"></div>
-        </section>
-
-        <section class="admin-view" id="admin-view-alerts" data-title="Student alerts">
-          <div class="admin-page-intro compact">
-            <div>
-              <p class="eyebrow">INTERVENTIONS</p>
-              <h1>Student alerts</h1>
-              <p>Resolve operational alerts or open the student record for academic intervention.</p>
-            </div>
-          </div>
-          <div class="alert-list" id="alert-list"></div>
-        </section>
-      </main>
+  const submissionsHtml = data.submissions.slice(0, 6).map((submission) => `
+    <div class="detail-list-row">
+      <span>${escapeHtml(submission.period)} · ${formatDateTime(submission.uploaded_at)}</span>
+      <strong>${escapeHtml(submission.review_status)}</strong>
     </div>
-  </div>
+  `).join("");
 
-  <dialog class="admin-modal student-modal" id="student-modal">
-    <div class="modal-surface">
-      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">×</button>
-      <div id="student-modal-content"></div>
+  const sessionsHtml = data.sessions.slice(0, 6).map((session) => `
+    <div class="detail-list-row">
+      <span>${formatDateTime(session.scheduled_at)}</span>
+      <strong>${escapeHtml(session.status)}</strong>
     </div>
-  </dialog>
+  `).join("");
 
-  <dialog class="admin-modal review-modal" id="review-modal">
-    <form class="modal-surface review-form" id="review-form">
-      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">×</button>
-      <p class="eyebrow">PRACTICE REVIEW</p>
-      <h2 id="review-modal-title">Review submission</h2>
-      <p class="modal-subtitle" id="review-modal-subtitle"></p>
-      <input id="review-submission-id" type="hidden">
-
-      <div class="review-video-placeholder">
-        <span>▶</span>
+  document.querySelector("#student-modal-content").innerHTML = `
+    <header class="student-modal-header">
+      <div class="student-modal-heading">
+        <span class="table-avatar">${initials(student.name)}</span>
         <div>
-          <strong id="review-file-name">practice-video.mp4</strong>
-          <small>Private storage preview will appear here when cloud storage is connected.</small>
+          <h2>${escapeHtml(student.name)}</h2>
+          <p>${escapeHtml(student.instrument)} · Week ${student.current_week} of 12 · Teacher ${escapeHtml(student.teacher_name)}</p>
         </div>
       </div>
+      <div class="large-score ${escapeHtml(student.analysis_status)}">${Math.round(student.overall_score || 0)}</div>
+    </header>
+    <div class="analysis-score-grid">
+      ${scoreCards.map(([label, score]) => `
+        <div class="analysis-score-card">
+          <span>${label}</span>
+          <strong>${Math.round(score || 0)}</strong>
+          <div class="mini-track"><span style="width:${Math.round(score || 0)}%"></span></div>
+        </div>
+      `).join("")}
+    </div>
+    <div class="student-detail-grid">
+      <section class="detail-block">
+        <h3>Latest skill ratings</h3>
+        <div class="skill-list">
+          ${skillNames.map((skill) => {
+            const value = Number(skills[skill] || 0);
+            return `<div class="skill-row"><span>${skill}</span><div class="skill-track"><span style="width:${value * 20}%"></span></div><strong>${value || "-"}</strong></div>`;
+          }).join("")}
+        </div>
+      </section>
+      <section class="detail-block">
+        <h3>Student details</h3>
+        <div class="detail-list">
+          <div class="detail-list-row"><span>Goal</span><strong>${escapeHtml(student.goal)}</strong></div>
+          <div class="detail-list-row"><span>Age group</span><strong>${escapeHtml(student.age_group)}</strong></div>
+          <div class="detail-list-row"><span>Parent</span><strong>${escapeHtml(student.parent_name || "Not linked")}</strong></div>
+          <div class="detail-list-row"><span>Course start</span><strong>${escapeHtml(student.course_start_date)}</strong></div>
+        </div>
+      </section>
+      <section class="detail-block">
+        <h3>Active alerts</h3>
+        <div class="detail-list">${alertsHtml}</div>
+      </section>
+      <section class="detail-block">
+        <h3>Recent submissions</h3>
+        <div class="detail-list">${submissionsHtml || '<p class="empty-state">No submissions.</p>'}</div>
+      </section>
+      <section class="detail-block">
+        <h3>Session history</h3>
+        <div class="detail-list">${sessionsHtml || '<p class="empty-state">No sessions.</p>'}</div>
+      </section>
+      <section class="detail-block">
+        <h3>Help calls</h3>
+        <div class="detail-list">
+          ${data.helpCalls.length ? data.helpCalls.map((call) => `<div class="detail-list-row"><span>${formatDateTime(call.scheduled_at)}</span><strong>${escapeHtml(call.status)}</strong></div>`).join("") : '<p class="empty-state">No help calls.</p>'}
+        </div>
+      </section>
+    </div>
+  `;
+  document.querySelector("#student-modal").showModal();
+}
 
-      <div class="review-text-grid">
-        <label>
-          Positive observation
-          <textarea id="review-positive" rows="3" required>Good focused practice and improved control.</textarea>
-        </label>
-        <label>
-          Main correction
-          <textarea id="review-correction" rows="3" required>Slow the difficult transition and remove unnecessary tension.</textarea>
-        </label>
-      </div>
+async function loadReviews() {
+  const data = await api("/api/reviews?status=pending");
+  document.querySelector("#nav-review-count").textContent = data.submissions.length;
+  document.querySelector("#review-queue").innerHTML = data.submissions.length
+    ? data.submissions.map((submission) => `
+      <article class="review-card">
+        <span class="video-icon">▶</span>
+        <div class="review-main">
+          <strong>${escapeHtml(submission.student_name)} · ${escapeHtml(submission.period)} practice</strong>
+          <span>Week ${submission.course_week} · ${escapeHtml(submission.file_name)} · ${formatDateTime(submission.uploaded_at)}</span>
+        </div>
+        <div class="waiting-time">
+          <strong>${submission.waiting_hours}h</strong>
+          <small>waiting</small>
+        </div>
+        <button
+          class="admin-button primary open-review"
+          data-submission-id="${submission.id}"
+          data-student-name="${escapeHtml(submission.student_name)}"
+          data-period="${escapeHtml(submission.period)}"
+          data-file-name="${escapeHtml(submission.file_name)}"
+          data-week="${submission.course_week}"
+        >Review</button>
+      </article>
+    `).join("")
+    : '<div class="empty-state">The review queue is clear.</div>';
+}
 
-      <label>
-        Next practice focus
-        <textarea id="review-next-focus" rows="2" required>Repeat the assigned exercise three times before the next upload.</textarea>
-      </label>
+function openReview(button) {
+  document.querySelector("#review-submission-id").value = button.dataset.submissionId;
+  document.querySelector("#review-modal-title").textContent = `${button.dataset.studentName}'s ${button.dataset.period} practice`;
+  document.querySelector("#review-modal-subtitle").textContent = `Week ${button.dataset.week} submission`;
+  document.querySelector("#review-file-name").textContent = button.dataset.fileName;
+  document.querySelector("#review-modal").showModal();
+}
 
-      <div class="skill-rating-grid" id="skill-rating-grid">
-        <label>Rhythm <input type="range" min="1" max="5" value="3" data-rating="rhythm"><output>3</output></label>
-        <label>Accuracy <input type="range" min="1" max="5" value="3" data-rating="accuracy"><output>3</output></label>
-        <label>Technique <input type="range" min="1" max="5" value="3" data-rating="technique"><output>3</output></label>
-        <label>Posture <input type="range" min="1" max="5" value="3" data-rating="posture"><output>3</output></label>
-        <label>Musicality <input type="range" min="1" max="5" value="3" data-rating="musicality"><output>3</output></label>
-        <label>Confidence <input type="range" min="1" max="5" value="3" data-rating="confidence"><output>3</output></label>
-        <label>Feedback applied <input type="range" min="1" max="5" value="3" data-rating="feedback_application"><output>3</output></label>
-      </div>
+async function submitReview(event) {
+  event.preventDefault();
+  const submissionId = document.querySelector("#review-submission-id").value;
+  const ratings = {};
+  document.querySelectorAll("[data-rating]").forEach((input) => {
+    ratings[input.dataset.rating] = Number(input.value);
+  });
 
-      <label class="checkbox-row">
-        <input id="review-help-call" type="checkbox">
-        <span>Recommend an extra teacher help call</span>
-      </label>
+  await api(`/api/reviews/${submissionId}`, {
+    method: "POST",
+    body: JSON.stringify({
+      positiveObservation: document.querySelector("#review-positive").value,
+      mainCorrection: document.querySelector("#review-correction").value,
+      nextPracticeFocus: document.querySelector("#review-next-focus").value,
+      requiresHelpCall: document.querySelector("#review-help-call").checked,
+      ratings
+    })
+  });
+  document.querySelector("#review-modal").close();
+  showToast("Review submitted and student analysis updated.");
+  await Promise.all([loadReviews(), loadDashboard()]);
+}
 
-      <button class="admin-button primary large" type="submit">Submit review and update student score</button>
-    </form>
-  </dialog>
+async function loadAlerts() {
+  const data = await api("/api/alerts");
+  document.querySelector("#nav-alert-count").textContent = data.alerts.length;
+  document.querySelector("#alert-list").innerHTML = data.alerts.length
+    ? data.alerts.map((alert) => `
+      <article class="alert-card ${escapeHtml(alert.severity)}">
+        <span class="alert-symbol">!</span>
+        <div class="alert-copy">
+          <h3>${escapeHtml(alert.title)}</h3>
+          <p>${escapeHtml(alert.detail)}</p>
+          <small>${escapeHtml(alert.student_name)} · ${escapeHtml(alert.instrument)} · Teacher ${escapeHtml(alert.teacher_name)}</small>
+        </div>
+        <div class="alert-actions">
+          <button class="row-action open-student" data-student-id="${alert.student_id}">Open student</button>
+          <button class="row-action resolve-alert" data-alert-id="${alert.id}">Resolve</button>
+        </div>
+      </article>
+    `).join("")
+    : '<div class="empty-state">No unresolved alerts.</div>';
+}
 
-  <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
-  <script src="admin.js"></script>
-</body>
-</html>
+async function resolveAlert(alertId) {
+  await api(`/api/alerts/${alertId}/resolve`, { method: "POST", body: "{}" });
+  showToast("Alert resolved.");
+  await Promise.all([loadAlerts(), loadDashboard()]);
+}
+
+function bindEvents() {
+  document.querySelector("#login-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const error = document.querySelector("#login-error");
+    error.hidden = true;
+    try {
+      const result = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: document.querySelector("#login-email").value.trim(),
+          password: document.querySelector("#login-password").value
+        })
+      });
+      adminToken = result.token;
+      adminUser = result.user;
+      localStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
+      setLoggedIn(true);
+      renderAdminUser();
+      await loadDashboard();
+    } catch (loginError) {
+      error.textContent = loginError.message;
+      error.hidden = false;
+    }
+  });
+
+  document.querySelectorAll("[data-admin-view]").forEach((button) => {
+    button.addEventListener("click", () => navigateAdmin(button.dataset.adminView));
+  });
+
+  document.querySelector("#refresh-dashboard").addEventListener("click", async () => {
+    await loadDashboard();
+    showToast("Dashboard refreshed.");
+  });
+  document.querySelector("#apply-student-filters").addEventListener("click", loadStudents);
+  document.querySelector("#student-search").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") loadStudents();
+  });
+  document.querySelector("#logout-button").addEventListener("click", () => logout());
+  document.querySelector("#review-form").addEventListener("submit", submitReview);
+
+  document.querySelectorAll("[data-rating]").forEach((input) => {
+    input.addEventListener("input", () => {
+      input.parentElement.querySelector("output").textContent = input.value;
+    });
+  });
+
+  document.querySelectorAll("[data-close-modal]").forEach((button) => {
+    button.addEventListener("click", () => document.querySelector(`#${button.dataset.closeModal}`).close());
+  });
+
+  document.addEventListener("click", async (event) => {
+    const studentButton = event.target.closest(".open-student");
+    if (studentButton) await openStudent(Number(studentButton.dataset.studentId));
+
+    const reviewButton = event.target.closest(".open-review");
+    if (reviewButton) openReview(reviewButton);
+
+    const resolveButton = event.target.closest(".resolve-alert");
+    if (resolveButton) await resolveAlert(Number(resolveButton.dataset.alertId));
+  });
+}
+
+function renderAdminUser() {
+  if (!adminUser) return;
+  document.querySelector("#admin-user-name").textContent = adminUser.name;
+  document.querySelector("#admin-user-role").textContent = adminUser.role.replaceAll("_", " ");
+  document.querySelector("#admin-avatar").textContent = initials(adminUser.name);
+}
+
+async function restoreSession() {
+  if (!adminToken) {
+    setLoggedIn(false);
+    return;
+  }
+  try {
+    const result = await api("/api/auth/me");
+    adminUser = result.user;
+    setLoggedIn(true);
+    renderAdminUser();
+    await loadDashboard();
+  } catch {
+    logout(false);
+  }
+}
+
+async function init() {
+  document.querySelector("#admin-date-label").textContent = new Intl.DateTimeFormat("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  }).format(new Date()).toUpperCase();
+  bindEvents();
+  await restoreSession();
+}
+
+init();
