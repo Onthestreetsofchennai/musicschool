@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111426">
+  <title>OTS Admin | Student Analysis</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="admin-login" id="admin-login">
+    <section class="login-card">
+      <div class="admin-brand">
+        <span class="brand-mark">OTS</span>
+        <span>
+          <strong>MUSIC SCHOOL</strong>
+          <small>Academic operations</small>
+        </span>
+      </div>
+      <div class="login-copy">
+        <p class="eyebrow">ADMIN PORTAL</p>
+        <h1>Student analysis and teacher operations.</h1>
+        <p>Monitor practice consistency, attendance, skill improvement, feedback application and intervention alerts.</p>
+      </div>
+      <form id="login-form" class="admin-form">
+        <label>
+          Email
+          <input id="login-email" type="email" value="admin@ots.test" autocomplete="username" required>
+        </label>
+        <label>
+          Password
+          <input id="login-password" type="password" value="otsadmin123" autocomplete="current-password" required>
+        </label>
+        <button class="admin-button primary large" type="submit">Sign in</button>
+        <p class="form-error" id="login-error" hidden></p>
+      </form>
+      <div class="demo-credentials">
+        <strong>Demo accounts</strong>
+        <span>Admin: admin@ots.test / otsadmin123</span>
+        <span>Teacher: arjun@ots.test / teacher123</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="admin-shell" id="admin-shell" hidden>
+    <aside class="admin-sidebar">
+      <div class="admin-brand">
+        <span class="brand-mark">OTS</span>
+        <span>
+          <strong>MUSIC SCHOOL</strong>
+          <small>Academic operations</small>
+        </span>
+      </div>
+
+      <nav class="admin-nav">
+        <button class="admin-nav-item is-active" data-admin-view="dashboard">
+          <span class="nav-symbol">⌂</span>
+          Dashboard
+        </button>
+        <button class="admin-nav-item" data-admin-view="students">
+          <span class="nav-symbol">◎</span>
+          Students
+        </button>
+        <button class="admin-nav-item" data-admin-view="reviews">
+          <span class="nav-symbol">▶</span>
+          Review queue
+          <span class="nav-count" id="nav-review-count">0</span>
+        </button>
+        <button class="admin-nav-item" data-admin-view="alerts">
+          <span class="nav-symbol">!</span>
+          Alerts
+          <span class="nav-count danger" id="nav-alert-count">0</span>
+        </button>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <span class="online-dot"></span>
+        <div>
+          <strong>Backend connected</strong>
+          <small>SQLite operational database</small>
+        </div>
+      </div>
+    </aside>
+
+    <div class="admin-main-column">
+      <header class="admin-topbar">
+        <div>
+          <p class="eyebrow" id="admin-date-label">MONDAY, 15 JUNE</p>
+          <h2 id="admin-page-title">Academic overview</h2>
+        </div>
+        <div class="admin-user">
+          <div>
+            <strong id="admin-user-name">OTS Admin</strong>
+            <small id="admin-user-role">Super admin</small>
+          </div>
+          <span class="admin-avatar" id="admin-avatar">OA</span>
+          <button class="logout-button" id="logout-button">Sign out</button>
+        </div>
+      </header>
+
+      <main class="admin-main">
+        <section class="admin-view is-active" id="admin-view-dashboard" data-title="Academic overview">
+          <div class="admin-page-intro">
+            <div>
+              <p class="eyebrow">STUDENT HEALTH</p>
+              <h1>Know who is progressing and who needs help.</h1>
+              <p>Scores combine practice consistency, attendance, skill improvement and application of teacher feedback.</p>
+            </div>
+            <button class="admin-button secondary" id="refresh-dashboard">Refresh data</button>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric-card">
+              <span class="metric-label">Active students</span>
+              <strong id="metric-active-students">0</strong>
+              <small>Across all 12-week courses</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Need attention</span>
+              <strong id="metric-attention-students">0</strong>
+              <small>Amber or red status</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Videos awaiting review</span>
+              <strong id="metric-pending-reviews">0</strong>
+              <small>Oldest reviews appear first</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Average student score</span>
+              <strong id="metric-average-score">0</strong>
+              <small>Weighted score out of 100</small>
+            </article>
+          </div>
+
+          <div class="overview-grid">
+            <section class="admin-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">PORTFOLIO STATUS</p>
+                  <h2>Risk distribution</h2>
+                </div>
+              </div>
+              <div class="distribution-list">
+                <div class="distribution-row">
+                  <span class="status-pill green">Green</span>
+                  <div class="distribution-track"><span class="green-fill" id="green-distribution"></span></div>
+                  <strong id="green-count">0</strong>
+                </div>
+                <div class="distribution-row">
+                  <span class="status-pill amber">Amber</span>
+                  <div class="distribution-track"><span class="amber-fill" id="amber-distribution"></span></div>
+                  <strong id="amber-count">0</strong>
+                </div>
+                <div class="distribution-row">
+                  <span class="status-pill red">Red</span>
+                  <div class="distribution-track"><span class="red-fill" id="red-distribution"></span></div>
+                  <strong id="red-count">0</strong>
+                </div>
+              </div>
+              <div class="score-formula">
+                <strong>Weighted student score</strong>
+                <span>Practice 35% · Attendance 25% · Skills 25% · Feedback application 15%</span>
+              </div>
+            </section>
+
+            <section class="admin-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">OPERATIONS</p>
+                  <h2>Service health</h2>
+                </div>
+              </div>
+              <div class="service-list">
+                <div><span>Open alerts</span><strong id="service-open-alerts">0</strong></div>
+                <div><span>Today's sessions</span><strong id="service-today-sessions">0</strong></div>
+                <div><span>Average review time</span><strong id="service-review-hours">0h</strong></div>
+              </div>
+            </section>
+          </div>
+
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">PRIORITY LIST</p>
+                <h2>Students needing attention</h2>
+              </div>
+              <button class="text-action" data-admin-view="students">View all students</button>
+            </div>
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Course</th>
+                    <th>Teacher</th>
+                    <th>Score</th>
+                    <th>Alerts</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="attention-students-body"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">UPCOMING</p>
+                <h2>Live sessions</h2>
+              </div>
+            </div>
+            <div class="upcoming-session-grid" id="upcoming-session-grid"></div>
+          </section>
+        </section>
+
+        <section class="admin-view" id="admin-view-students" data-title="Student analysis">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">STUDENT 360</p>
+              <h1>Student analysis</h1>
+              <p>Filter the portfolio, compare score components and open a complete student record.</p>
+            </div>
+          </div>
+
+          <section class="admin-panel filters-panel">
+            <label class="search-field">
+              <span>Search</span>
+              <input id="student-search" type="search" placeholder="Student, teacher or instrument">
+            </label>
+            <label>
+              Status
+              <select id="student-status-filter">
+                <option value="">All statuses</option>
+                <option value="green">Green</option>
+                <option value="amber">Amber</option>
+                <option value="red">Red</option>
+              </select>
+            </label>
+            <button class="admin-button secondary" id="apply-student-filters">Apply filters</button>
+          </section>
+
+          <section class="admin-panel">
+            <div class="table-wrap">
+              <table class="admin-table student-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Teacher</th>
+                    <th>Week</th>
+                    <th>Practice</th>
+                    <th>Attendance</th>
+                    <th>Skills</th>
+                    <th>Overall</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="students-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="admin-view" id="admin-view-reviews" data-title="Teacher review queue">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">TEACHER WORKFLOW</p>
+              <h1>Practice review queue</h1>
+              <p>Review the oldest submissions first, score skills and define the student's next practice focus.</p>
+            </div>
+            <span class="queue-sla">Target: within 12 hours</span>
+          </div>
+          <div class="review-queue" id="review-queue"></div>
+        </section>
+
+        <section class="admin-view" id="admin-view-alerts" data-title="Student alerts">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">INTERVENTIONS</p>
+              <h1>Student alerts</h1>
+              <p>Resolve operational alerts or open the student record for academic intervention.</p>
+            </div>
+          </div>
+          <div class="alert-list" id="alert-list"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="admin-modal student-modal" id="student-modal">
+    <div class="modal-surface">
+      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">×</button>
+      <div id="student-modal-content"></div>
+    </div>
+  </dialog>
+
+  <dialog class="admin-modal review-modal" id="review-modal">
+    <form class="modal-surface review-form" id="review-form">
+      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">×</button>
+      <p class="eyebrow">PRACTICE REVIEW</p>
+      <h2 id="review-modal-title">Review submission</h2>
+      <p class="modal-subtitle" id="review-modal-subtitle"></p>
+      <input id="review-submission-id" type="hidden">
+
+      <div class="review-video-placeholder">
+        <span>▶</span>
+        <div>
+          <strong id="review-file-name">practice-video.mp4</strong>
+          <small>Private storage preview will appear here when cloud storage is connected.</small>
+        </div>
+      </div>
+
+      <div class="review-text-grid">
+        <label>
+          Positive observation
+          <textarea id="review-positive" rows="3" required>Good focused practice and improved control.</textarea>
+        </label>
+        <label>
+          Main correction
+          <textarea id="review-correction" rows="3" required>Slow the difficult transition and remove unnecessary tension.</textarea>
+        </label>
+      </div>
+
+      <label>
+        Next practice focus
+        <textarea id="review-next-focus" rows="2" required>Repeat the assigned exercise three times before the next upload.</textarea>
+      </label>
+
+      <div class="skill-rating-grid" id="skill-rating-grid">
+        <label>Rhythm <input type="range" min="1" max="5" value="3" data-rating="rhythm"><output>3</output></label>
+        <label>Accuracy <input type="range" min="1" max="5" value="3" data-rating="accuracy"><output>3</output></label>
+        <label>Technique <input type="range" min="1" max="5" value="3" data-rating="technique"><output>3</output></label>
+        <label>Posture <input type="range" min="1" max="5" value="3" data-rating="posture"><output>3</output></label>
+        <label>Musicality <input type="range" min="1" max="5" value="3" data-rating="musicality"><output>3</output></label>
+        <label>Confidence <input type="range" min="1" max="5" value="3" data-rating="confidence"><output>3</output></label>
+        <label>Feedback applied <input type="range" min="1" max="5" value="3" data-rating="feedback_application"><output>3</output></label>
+      </div>
+
+      <label class="checkbox-row">
+        <input id="review-help-call" type="checkbox">
+        <span>Recommend an extra teacher help call</span>
+      </label>
+
+      <button class="admin-button primary large" type="submit">Submit review and update student score</button>
+    </form>
+  </dialog>
+
+  <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
+  <script src="admin.js"></script>
+</body>
+</html>

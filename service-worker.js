@@ -1,4 +1,4 @@
-const CACHE_NAME = "music-school-ots-v2";
+const CACHE_NAME = "music-school-ots-v4";
 const APP_ASSETS = [
   "./",
   "./index.html",
@@ -24,7 +24,18 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/api/")) return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok && url.origin === self.location.origin) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
