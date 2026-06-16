@@ -214,6 +214,17 @@ textarea:focus {
   font-weight: 700;
 }
 
+.student-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  margin: 22px 0;
+}
+
+.student-create-grid .full-width {
+  grid-column: 1 / -1;
+}
+
 .demo-credentials {
   display: grid;
   gap: 4px;
@@ -1174,6 +1185,14 @@ textarea:focus {
 }
 
 @media (max-width: 760px) {
+  .student-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .student-create-grid .full-width {
+    grid-column: auto;
+  }
+
   .admin-sidebar {
     position: static;
     width: 100%;

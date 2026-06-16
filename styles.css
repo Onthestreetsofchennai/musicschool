@@ -1307,6 +1307,10 @@ textarea:focus {
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.25);
 }
 
+.auth-panel {
+  width: min(520px, 100%);
+}
+
 .onboarding-copy {
   margin: 35px 0 28px;
 }
@@ -1328,6 +1332,59 @@ textarea:focus {
   margin: 16px 0 0;
   font-size: 0.75rem;
   text-align: center;
+}
+
+.auth-destination {
+  margin: 0;
+  padding: 13px 15px;
+  border-radius: 13px;
+  background: var(--purple-pale);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+#student-login-otp {
+  height: 58px;
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  text-align: center;
+}
+
+.auth-back {
+  justify-self: center;
+}
+
+.auth-error {
+  margin: 15px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff0f1;
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.development-otp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px dashed #b7abea;
+  border-radius: 13px;
+  background: #f8f5ff;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.development-otp strong {
+  color: var(--purple);
+  font-size: 1.2rem;
+  letter-spacing: 0.18em;
 }
 
 .modal {

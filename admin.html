@@ -221,6 +221,7 @@
               <h1>Student analysis</h1>
               <p>Filter the portfolio, compare score components and open a complete student record.</p>
             </div>
+            <button class="admin-button primary" id="open-create-student">Add student</button>
           </div>
 
           <section class="admin-panel filters-panel">
@@ -342,6 +343,63 @@
       </label>
 
       <button class="admin-button primary large" type="submit">Submit review and update student score</button>
+    </form>
+  </dialog>
+
+  <dialog class="admin-modal" id="create-student-modal">
+    <form class="modal-surface" id="create-student-form">
+      <button class="modal-close" type="button" data-close-modal="create-student-modal" aria-label="Close">X</button>
+      <p class="eyebrow">NEW ENROLLMENT</p>
+      <h2>Add a student account</h2>
+      <p class="modal-subtitle">The learner will use this email address to receive a one-time login code.</p>
+
+      <div class="student-create-grid">
+        <label>
+          Student name
+          <input id="create-student-name" required>
+        </label>
+        <label>
+          Login email
+          <input id="create-student-email" type="email" required>
+        </label>
+        <label>
+          Age group
+          <select id="create-student-age" required>
+            <option value="8-12">8-12</option>
+            <option value="13-17">13-17</option>
+            <option value="18+">18+</option>
+          </select>
+        </label>
+        <label>
+          Instrument
+          <select id="create-student-instrument" required>
+            <option>Guitar</option>
+            <option>Keyboard</option>
+          </select>
+        </label>
+        <label>
+          Assigned teacher
+          <select id="create-student-teacher" required></select>
+        </label>
+        <label>
+          Course start
+          <input id="create-student-start" type="date" required>
+        </label>
+        <label class="full-width">
+          Learning goal
+          <input id="create-student-goal" value="Play complete songs confidently" required>
+        </label>
+        <label>
+          Parent name
+          <input id="create-parent-name">
+        </label>
+        <label>
+          Parent email
+          <input id="create-parent-email" type="email">
+        </label>
+      </div>
+      <p class="form-error" id="create-student-error" hidden></p>
+      <button class="admin-button primary large" type="submit">Create student and login account</button>
     </form>
   </dialog>
 

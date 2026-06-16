@@ -11,13 +11,16 @@
 | Student | Course, practice uploads, feedback and help calls |
 | Parent | Progress summary and approved notifications |
 
-Teachers are restricted to their assigned roster at the API layer.
+Teachers are restricted to their assigned roster at the API layer. Students are
+restricted to their own data through email OTP login and hashed database-backed
+sessions.
 
 ## 2. Core data
 
 | Area | Tables |
 | --- | --- |
 | Identity | `users`, `teachers`, `students` |
+| Student login | `student_accounts`, `otp_challenges`, `auth_sessions` |
 | Curriculum | `courses`, `course_weeks`, `enrollments` |
 | Teaching | `live_sessions`, `help_calls` |
 | Practice | `practice_submissions`, `teacher_reviews` |
@@ -26,14 +29,15 @@ Teachers are restricted to their assigned roster at the API layer.
 
 ## 3. Daily workflow
 
-1. Student records a morning or evening 10-minute practice video.
-2. A submission record enters the assigned teacher's review queue.
-3. The teacher provides one positive observation, one correction and one next
+1. Student signs in with registered email and six-digit OTP.
+2. Student records a morning or evening 10-minute practice video.
+3. A submission record enters the assigned teacher's review queue.
+4. The teacher provides one positive observation, one correction and one next
    practice focus.
-4. The teacher scores rhythm, accuracy, technique, posture, musicality,
+5. The teacher scores rhythm, accuracy, technique, posture, musicality,
    confidence and feedback application from 1 to 5.
-5. The backend recalculates the student health score and alerts.
-6. The student immediately sees the reviewed feedback.
+6. The backend recalculates the student health score and alerts.
+7. The student immediately sees the reviewed feedback.
 
 ## 4. Weekly workflow
 
@@ -115,9 +119,9 @@ System alerts are generated for:
 Student / Parent App
         |
         v
-API and authentication
+API, OTP email and authentication
         |
-        +--> PostgreSQL: users, courses, progress and analysis
+        +--> PostgreSQL: users, student accounts, OTP sessions and analysis
         +--> Private object storage: practice videos
         +--> Queue workers: video processing and notifications
         +--> Meeting provider: live sessions and help calls
@@ -126,4 +130,5 @@ API and authentication
 
 The SQLite implementation is suitable for product review and local
 development. Before a public launch, move the schema to PostgreSQL, use signed
-video upload URLs and add expiring server-side sessions.
+video upload URLs, configure the OTP email provider and keep session secrets in
+the hosting environment.

@@ -7,6 +7,8 @@ A working full-stack foundation for a guided 12-week music school.
 - Student app with assigned teacher, 12-week course, two weekly sessions,
   morning/evening practice check-ins, teacher feedback and help calls
 - Admin login and academic operations dashboard
+- Student email OTP login backed by database sessions
+- Admin enrollment form for real student email accounts
 - Student 360 analysis with weighted scores and active alerts
 - Teacher review queue with seven skill ratings and written feedback
 - Role-scoped teacher access
@@ -52,8 +54,14 @@ The SQLite database is created automatically at `data/ots.db`.
 | Guitar teacher | `arjun@ots.test` | `teacher123` |
 | Keyboard teacher | `neha@ots.test` | `teacher123` |
 
-The student app currently represents demo student `#1`, Riya Sharma. Student
-authentication is the next implementation step.
+Student demo login:
+
+```text
+riya@ots.test
+```
+
+In local development, the OTP appears on the student login screen and in the
+server console.
 
 ## Student analysis score
 
@@ -85,9 +93,23 @@ or another private object store.
 Stop the server and delete `data/ots.db`, `data/ots.db-shm` and
 `data/ots.db-wal`. The next server start recreates clean demo data.
 
+## Production OTP email
+
+The app can send OTP emails through Resend when these environment variables are
+configured on the Node hosting service:
+
+```text
+NODE_ENV=production
+OTP_SECRET=replace-with-a-long-random-secret
+RESEND_API_KEY=re_xxxxxxxxx
+OTP_FROM_EMAIL=MUSIC SCHOOL OTS <login@your-verified-domain.com>
+```
+
+Without `RESEND_API_KEY` and `OTP_FROM_EMAIL`, production OTP email delivery is
+disabled.
+
 ## Production work still required
 
-- Student and parent authentication
 - Cloud video upload, playback authorization and retention rules
 - Real video meeting provider
 - Notifications through push, email or WhatsApp

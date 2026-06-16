@@ -13,6 +13,7 @@
 - `service-worker.js`
 - `server.mjs`
 - `package.json`
+- `.env.example`
 - `README.md`
 - `BACKEND_STRUCTURE.md`
 - `.gitignore`
@@ -53,3 +54,15 @@ Start command: npm start
 
 The host must support Node.js 24 or newer and persistent storage, or the SQLite
 database should be migrated to a managed PostgreSQL database.
+
+## Required production environment variables
+
+```text
+NODE_ENV=production
+OTP_SECRET=replace-with-a-long-random-secret
+RESEND_API_KEY=re_xxxxxxxxx
+OTP_FROM_EMAIL=MUSIC SCHOOL OTS <login@your-verified-domain.com>
+```
+
+For local development without Resend, OTP codes appear on the student login
+screen so the flow can be tested without sending real email.

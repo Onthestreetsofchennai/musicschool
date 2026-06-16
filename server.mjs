@@ -1,7 +1,14 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomInt,
+  randomUUID,
+  timingSafeEqual
+} from "node:crypto";
 import {
   createDatabase,
   getStudentAnalysis,
@@ -15,7 +22,11 @@ const ROOT = resolve(".");
 const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || "127.0.0.1";
 const db = createDatabase(join(ROOT, "data", "ots.db"));
-const sessions = new Map();
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const OTP_SECRET = process.env.OTP_SECRET || "music-school-ots-development-secret";
+const OTP_EXPIRY_MINUTES = 10;
+const STUDENT_SESSION_DAYS = 14;
+const STAFF_SESSION_HOURS = 12;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -68,9 +79,79 @@ function getToken(request) {
   return authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function hashToken(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function createAuthSession({ principalType, userId = null, studentId = null, role, ttlMilliseconds }) {
+  const token = randomBytes(32).toString("base64url");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + ttlMilliseconds);
+  db.prepare(`
+    INSERT INTO auth_sessions (
+      token_hash, principal_type, user_id, student_id, role,
+      created_at, expires_at, last_seen_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    hashToken(token),
+    principalType,
+    userId,
+    studentId,
+    role,
+    now.toISOString(),
+    expiresAt.toISOString(),
+    now.toISOString()
+  );
+  return { token, expiresAt: expiresAt.toISOString() };
+}
+
+function getAuthSession(request) {
+  const token = getToken(request);
+  if (!token) return null;
+  const tokenHash = hashToken(token);
+  const row = db.prepare(`
+    SELECT
+      auth.*,
+      u.name AS staff_name,
+      u.email AS staff_email,
+      s.name AS student_name,
+      account.email AS student_email
+    FROM auth_sessions auth
+    LEFT JOIN users u ON u.id = auth.user_id
+    LEFT JOIN students s ON s.id = auth.student_id
+    LEFT JOIN student_accounts account ON account.student_id = auth.student_id
+    WHERE auth.token_hash = ? AND auth.revoked_at IS NULL
+  `).get(tokenHash);
+  if (!row) return null;
+  if (new Date(row.expires_at) <= new Date()) {
+    db.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE id = ?").run(new Date().toISOString(), row.id);
+    return null;
+  }
+  db.prepare("UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?").run(new Date().toISOString(), row.id);
+  return {
+    sessionId: row.id,
+    tokenHash,
+    principalType: row.principal_type,
+    userId: row.user_id,
+    studentId: row.student_id,
+    role: row.role,
+    name: row.principal_type === "staff" ? row.staff_name : row.student_name,
+    email: row.principal_type === "staff" ? row.staff_email : row.student_email,
+    expiresAt: row.expires_at
+  };
+}
+
 function requireAuth(request, response, allowedRoles = []) {
-  const session = sessions.get(getToken(request));
-  if (!session) {
+  const session = getAuthSession(request);
+  if (!session || session.principalType !== "staff") {
     sendJson(response, 401, { error: "Authentication required" });
     return null;
   }
@@ -79,6 +160,75 @@ function requireAuth(request, response, allowedRoles = []) {
     return null;
   }
   return session;
+}
+
+function requireStudentAuth(request, response) {
+  const session = getAuthSession(request);
+  if (!session || session.principalType !== "student" || !session.studentId) {
+    sendJson(response, 401, { error: "Student login required" });
+    return null;
+  }
+  return session;
+}
+
+function hashOtp(code, salt) {
+  return createHmac("sha256", OTP_SECRET).update(`${salt}:${code}`).digest("hex");
+}
+
+function otpMatches(code, salt, expectedHash) {
+  const calculated = Buffer.from(hashOtp(code, salt), "hex");
+  const stored = Buffer.from(expectedHash, "hex");
+  return calculated.length === stored.length && timingSafeEqual(calculated, stored);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function deliverOtpEmail({ email, studentName, code, challengeId }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.OTP_FROM_EMAIL;
+  if (apiKey && from) {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": `ots-otp-${challengeId}`
+      },
+      body: JSON.stringify({
+        from,
+        to: [email],
+        subject: `${code} is your MUSIC SCHOOL OTS login code`,
+        text: `Hello ${studentName}, your MUSIC SCHOOL OTS login code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;color:#111426">
+            <div style="font-weight:800;margin-bottom:24px">MUSIC SCHOOL OTS</div>
+            <h1 style="font-size:26px">Your login code</h1>
+            <p>Hello ${escapeHtml(studentName)}, use this one-time code to sign in:</p>
+            <div style="font-size:38px;font-weight:900;letter-spacing:8px;padding:20px 0;color:#7057ff">${code}</div>
+            <p>This code expires in ${OTP_EXPIRY_MINUTES} minutes. Do not share it with anyone.</p>
+          </div>
+        `
+      })
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Email delivery failed: ${detail.slice(0, 240)}`);
+    }
+    return { mode: "email" };
+  }
+
+  if (IS_PRODUCTION) {
+    throw new Error("Email delivery is not configured");
+  }
+  console.log(`[DEV OTP] ${email}: ${code}`);
+  return { mode: "development", developmentOtp: code };
 }
 
 function statusRank(status) {
@@ -204,6 +354,7 @@ function getStudents(url, session) {
     SELECT
       s.id, s.name, s.age_group, s.instrument, s.goal, s.current_week,
       s.parent_name, s.parent_email,
+      account.email,
       u.name AS teacher_name, t.id AS teacher_id,
       ps.practice_score, ps.attendance_score, ps.skill_score, ps.feedback_score,
       ps.overall_score, ps.status,
@@ -212,6 +363,7 @@ function getStudents(url, session) {
     FROM students s
     JOIN teachers t ON t.id = s.assigned_teacher_id
     JOIN users u ON u.id = t.user_id
+    LEFT JOIN student_accounts account ON account.student_id = s.id
     LEFT JOIN progress_snapshots ps
       ON ps.student_id = s.id
       AND ps.snapshot_date = (SELECT MAX(snapshot_date) FROM progress_snapshots WHERE student_id = s.id)
@@ -250,11 +402,241 @@ function getReviewQueue(url, session) {
   `).all(status, teacherId, teacherId);
 }
 
+function getTeachersOverview() {
+  return db.prepare(`
+    SELECT
+      t.id,
+      u.name,
+      u.email,
+      t.instrument,
+      t.bio,
+      t.review_sla_hours,
+      COUNT(DISTINCT s.id) AS student_count,
+      SUM(CASE WHEN psnap.status IN ('amber', 'red') THEN 1 ELSE 0 END) AS attention_count,
+      COUNT(DISTINCT CASE WHEN psub.review_status = 'pending' THEN psub.id END) AS pending_reviews,
+      ROUND(AVG(CASE
+        WHEN psub.reviewed_at IS NOT NULL
+        THEN (julianday(psub.reviewed_at) - julianday(psub.uploaded_at)) * 24
+      END), 1) AS review_turnaround_hours
+    FROM teachers t
+    JOIN users u ON u.id = t.user_id
+    LEFT JOIN students s ON s.assigned_teacher_id = t.id AND s.active = 1
+    LEFT JOIN progress_snapshots psnap
+      ON psnap.student_id = s.id
+      AND psnap.snapshot_date = (
+        SELECT MAX(snapshot_date) FROM progress_snapshots WHERE student_id = s.id
+      )
+    LEFT JOIN practice_submissions psub ON psub.teacher_id = t.id
+    WHERE t.active = 1 AND u.active = 1
+    GROUP BY t.id
+    ORDER BY u.name
+  `).all();
+}
+
+function getTeacherOverview(session) {
+  const teacherId = getTeacherScope(session);
+  if (teacherId < 0) return null;
+  const teacher = db.prepare(`
+    SELECT t.id, t.instrument, t.bio, t.review_sla_hours, u.name, u.email
+    FROM teachers t
+    JOIN users u ON u.id = t.user_id
+    WHERE t.id = ?
+  `).get(teacherId);
+  const dashboard = getDashboard(session);
+  const sessions = db.prepare(`
+    SELECT ls.*, s.name AS student_name, s.instrument
+    FROM live_sessions ls
+    JOIN students s ON s.id = ls.student_id
+    WHERE ls.teacher_id = ?
+      AND julianday(ls.scheduled_at) >= julianday('now', '-14 days')
+      AND julianday(ls.scheduled_at) <= julianday('now', '+30 days')
+    ORDER BY ls.scheduled_at
+  `).all(teacherId);
+  const helpCalls = db.prepare(`
+    SELECT hc.*, s.name AS student_name, s.instrument, s.current_week
+    FROM help_calls hc
+    JOIN students s ON s.id = hc.student_id
+    WHERE hc.teacher_id = ?
+    ORDER BY
+      CASE hc.status WHEN 'scheduled' THEN 1 WHEN 'requested' THEN 2 ELSE 3 END,
+      hc.scheduled_at
+  `).all(teacherId);
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    teacher,
+    summary: dashboard.summary,
+    attentionStudents: dashboard.attentionStudents,
+    todaySessions: sessions.filter((item) => item.scheduled_at.slice(0, 10) === today),
+    upcomingSessions: sessions.filter((item) => new Date(item.scheduled_at) >= new Date()).slice(0, 12),
+    sessions,
+    helpCalls,
+    pendingReviews: getReviewQueue(new URL("http://local/api/reviews?status=pending"), session)
+  };
+}
+
 async function handleApi(request, response, url) {
   const pathname = url.pathname;
 
   if (pathname === "/api/health" && request.method === "GET") {
-    return sendJson(response, 200, { status: "ok", database: "sqlite", time: new Date().toISOString() });
+    return sendJson(response, 200, {
+      status: "ok",
+      database: "sqlite",
+      emailDelivery: process.env.RESEND_API_KEY && process.env.OTP_FROM_EMAIL ? "resend" : "development",
+      time: new Date().toISOString()
+    });
+  }
+
+  if (pathname === "/api/student-auth/request-otp" && request.method === "POST") {
+    const body = await readJson(request);
+    const email = normalizeEmail(body.email);
+    if (!isValidEmail(email)) return sendJson(response, 400, { error: "Enter a valid email address" });
+
+    const account = db.prepare(`
+      SELECT account.*, s.name AS student_name
+      FROM student_accounts account
+      JOIN students s ON s.id = account.student_id
+      WHERE account.email = ? AND account.active = 1 AND s.active = 1
+    `).get(email);
+
+    const genericMessage = "If this email is registered, a login code has been sent.";
+    if (!account) return sendJson(response, 200, { ok: true, message: genericMessage });
+
+    const recentRequests = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM otp_challenges
+      WHERE student_account_id = ?
+        AND julianday(created_at) >= julianday('now', '-10 minutes')
+    `).get(account.id).count;
+    if (recentRequests >= 3) {
+      return sendJson(response, 429, { error: "Too many codes requested. Please wait 10 minutes." });
+    }
+
+    db.prepare(`
+      UPDATE otp_challenges
+      SET consumed_at = ?
+      WHERE student_account_id = ? AND consumed_at IS NULL
+    `).run(new Date().toISOString(), account.id);
+
+    const code = String(randomInt(100000, 1_000_000));
+    const salt = randomBytes(16).toString("hex");
+    const createdAt = new Date();
+    const expiresAt = new Date(createdAt.getTime() + OTP_EXPIRY_MINUTES * 60_000);
+    const challengeResult = db.prepare(`
+      INSERT INTO otp_challenges (
+        student_account_id, code_hash, code_salt, expires_at,
+        attempts, max_attempts, delivery_status, created_at
+      ) VALUES (?, ?, ?, ?, 0, 5, 'pending', ?)
+    `).run(account.id, hashOtp(code, salt), salt, expiresAt.toISOString(), createdAt.toISOString());
+    const challengeId = Number(challengeResult.lastInsertRowid);
+
+    try {
+      const delivery = await deliverOtpEmail({
+        email,
+        studentName: account.student_name,
+        code,
+        challengeId
+      });
+      db.prepare("UPDATE otp_challenges SET delivery_status = 'sent' WHERE id = ?").run(challengeId);
+      return sendJson(response, 200, {
+        ok: true,
+        message: delivery.mode === "email" ? "Login code sent to your email." : "Development login code generated.",
+        expiresInSeconds: OTP_EXPIRY_MINUTES * 60,
+        developmentOtp: delivery.developmentOtp
+      });
+    } catch (error) {
+      db.prepare("UPDATE otp_challenges SET delivery_status = 'failed' WHERE id = ?").run(challengeId);
+      console.error(error);
+      return sendJson(response, 503, { error: "The login email could not be sent. Please contact OTS support." });
+    }
+  }
+
+  if (pathname === "/api/student-auth/verify-otp" && request.method === "POST") {
+    const body = await readJson(request);
+    const email = normalizeEmail(body.email);
+    const code = String(body.otp || "").trim();
+    if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
+      return sendJson(response, 400, { error: "Enter the six-digit login code" });
+    }
+
+    const account = db.prepare(`
+      SELECT account.*, s.name AS student_name
+      FROM student_accounts account
+      JOIN students s ON s.id = account.student_id
+      WHERE account.email = ? AND account.active = 1 AND s.active = 1
+    `).get(email);
+    if (!account) return sendJson(response, 401, { error: "Invalid or expired login code" });
+
+    const challenge = db.prepare(`
+      SELECT *
+      FROM otp_challenges
+      WHERE student_account_id = ? AND consumed_at IS NULL AND delivery_status = 'sent'
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(account.id);
+    if (
+      !challenge ||
+      new Date(challenge.expires_at) <= new Date() ||
+      challenge.attempts >= challenge.max_attempts
+    ) {
+      return sendJson(response, 401, { error: "Invalid or expired login code" });
+    }
+
+    if (!otpMatches(code, challenge.code_salt, challenge.code_hash)) {
+      db.prepare("UPDATE otp_challenges SET attempts = attempts + 1 WHERE id = ?").run(challenge.id);
+      return sendJson(response, 401, { error: "Invalid or expired login code" });
+    }
+
+    const now = new Date().toISOString();
+    db.exec("BEGIN");
+    try {
+      db.prepare("UPDATE otp_challenges SET consumed_at = ? WHERE id = ?").run(now, challenge.id);
+      db.prepare(`
+        UPDATE student_accounts
+        SET email_verified_at = COALESCE(email_verified_at, ?)
+        WHERE id = ?
+      `).run(now, account.id);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+
+    const auth = createAuthSession({
+      principalType: "student",
+      studentId: account.student_id,
+      role: "student",
+      ttlMilliseconds: STUDENT_SESSION_DAYS * 24 * 60 * 60 * 1000
+    });
+    logAudit(db, null, "student_login", "student", account.student_id, { email });
+    return sendJson(response, 200, {
+      token: auth.token,
+      expiresAt: auth.expiresAt,
+      student: {
+        id: account.student_id,
+        name: account.student_name,
+        email
+      }
+    });
+  }
+
+  if (pathname === "/api/student-auth/me" && request.method === "GET") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    return sendJson(response, 200, {
+      student: {
+        id: session.studentId,
+        name: session.name,
+        email: session.email
+      },
+      expiresAt: session.expiresAt
+    });
+  }
+
+  if (pathname === "/api/student-auth/logout" && request.method === "POST") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    db.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE id = ?").run(new Date().toISOString(), session.sessionId);
+    return sendJson(response, 200, { ok: true });
   }
 
   if (pathname === "/api/auth/login" && request.method === "POST") {
@@ -263,11 +645,21 @@ async function handleApi(request, response, url) {
     if (!user || !verifyPassword(String(body.password || ""), user.password_hash)) {
       return sendJson(response, 401, { error: "Invalid email or password" });
     }
-    const token = randomUUID();
-    const session = { userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now() };
-    sessions.set(token, session);
+    const auth = createAuthSession({
+      principalType: "staff",
+      userId: user.id,
+      role: user.role,
+      ttlMilliseconds: STAFF_SESSION_HOURS * 60 * 60 * 1000
+    });
+    const session = {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      expiresAt: auth.expiresAt
+    };
     logAudit(db, user.id, "login", "user", user.id);
-    return sendJson(response, 200, { token, user: session });
+    return sendJson(response, 200, { token: auth.token, user: session });
   }
 
   if (pathname === "/api/auth/me" && request.method === "GET") {
@@ -276,16 +668,107 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, { user: session });
   }
 
+  if (pathname === "/api/auth/logout" && request.method === "POST") {
+    const session = requireAuth(request, response);
+    if (!session) return;
+    db.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE id = ?").run(new Date().toISOString(), session.sessionId);
+    return sendJson(response, 200, { ok: true });
+  }
+
   if (pathname === "/api/dashboard" && request.method === "GET") {
     const session = requireAuth(request, response, ["super_admin", "academic_head", "teacher", "operations"]);
     if (!session) return;
     return sendJson(response, 200, getDashboard(session));
   }
 
+  if (pathname === "/api/teachers" && request.method === "GET") {
+    const session = requireAuth(request, response, ["super_admin", "academic_head", "operations"]);
+    if (!session) return;
+    return sendJson(response, 200, { teachers: getTeachersOverview() });
+  }
+
+  if (pathname === "/api/teacher/overview" && request.method === "GET") {
+    const session = requireAuth(request, response, ["teacher"]);
+    if (!session) return;
+    const overview = getTeacherOverview(session);
+    return overview ? sendJson(response, 200, overview) : sendJson(response, 404, { error: "Teacher profile not found" });
+  }
+
   if (pathname === "/api/students" && request.method === "GET") {
     const session = requireAuth(request, response, ["super_admin", "academic_head", "teacher", "operations"]);
     if (!session) return;
     return sendJson(response, 200, { students: getStudents(url, session) });
+  }
+
+  if (pathname === "/api/students" && request.method === "POST") {
+    const session = requireAuth(request, response, ["super_admin", "academic_head", "operations"]);
+    if (!session) return;
+    const body = await readJson(request);
+    const email = normalizeEmail(body.email);
+    const name = String(body.name || "").trim();
+    const instrument = String(body.instrument || "").trim();
+    const goal = String(body.goal || "").trim();
+    const ageGroup = String(body.ageGroup || "").trim();
+    const teacherId = Number(body.teacherId);
+    const parentEmail = normalizeEmail(body.parentEmail);
+    if (name.length < 2 || !isValidEmail(email) || !instrument || !goal || !ageGroup || !teacherId) {
+      return sendJson(response, 400, { error: "Name, email, age group, instrument, goal and teacher are required" });
+    }
+    if (parentEmail && !isValidEmail(parentEmail)) {
+      return sendJson(response, 400, { error: "Enter a valid parent email address" });
+    }
+    if (db.prepare("SELECT id FROM student_accounts WHERE email = ?").get(email)) {
+      return sendJson(response, 409, { error: "A student account already uses this email" });
+    }
+    const teacher = db.prepare("SELECT id, instrument FROM teachers WHERE id = ? AND active = 1").get(teacherId);
+    if (!teacher) return sendJson(response, 400, { error: "Assigned teacher was not found" });
+    if (teacher.instrument !== instrument) {
+      return sendJson(response, 400, { error: `Choose a ${instrument} teacher for this student` });
+    }
+    const course = db.prepare("SELECT id FROM courses WHERE instrument = ? AND active = 1 ORDER BY id LIMIT 1").get(instrument);
+    if (!course) return sendJson(response, 400, { error: "No active course exists for this instrument" });
+
+    const createdAt = new Date().toISOString();
+    db.exec("BEGIN");
+    try {
+      const studentResult = db.prepare(`
+        INSERT INTO students (
+          name, age_group, instrument, goal, assigned_teacher_id, current_week,
+          course_start_date, parent_name, parent_email, active, created_at
+        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 1, ?)
+      `).run(
+        name,
+        ageGroup,
+        instrument,
+        goal,
+        teacherId,
+        String(body.courseStartDate || createdAt.slice(0, 10)),
+        String(body.parentName || "").trim() || null,
+        parentEmail || null,
+        createdAt
+      );
+      const studentId = Number(studentResult.lastInsertRowid);
+      db.prepare(`
+        INSERT INTO student_accounts (student_id, email, active, created_at)
+        VALUES (?, ?, 1, ?)
+      `).run(studentId, email, createdAt);
+      db.prepare(`
+        INSERT INTO student_preferences (
+          student_id, morning_reminder, evening_reminder, parent_updates, updated_at
+        ) VALUES (?, 1, 1, 1, ?)
+      `).run(studentId, createdAt);
+      db.prepare(`
+        INSERT INTO enrollments (student_id, course_id, status, enrolled_at)
+        VALUES (?, ?, 'active', ?)
+      `).run(studentId, course.id, createdAt);
+      db.exec("COMMIT");
+      recalculateStudent(db, studentId);
+      logAudit(db, session.userId, "create_student", "student", studentId, { email, teacherId });
+      return sendJson(response, 201, { student: getStudentAnalysis(db, studentId) });
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   const studentMatch = pathname.match(/^\/api\/students\/(\d+)$/);
@@ -427,18 +910,52 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, { ok: true });
   }
 
-  const studentAppMatch = pathname.match(/^\/api\/student-app\/(\d+)$/);
-  if (studentAppMatch && request.method === "GET") {
-    const analysis = getStudentAnalysis(db, Number(studentAppMatch[1]));
+  const helpCallStatusMatch = pathname.match(/^\/api\/help-calls\/(\d+)\/status$/);
+  if (helpCallStatusMatch && request.method === "POST") {
+    const session = requireAuth(request, response, ["teacher", "academic_head"]);
+    if (!session) return;
+    const body = await readJson(request);
+    if (!["scheduled", "completed", "cancelled"].includes(body.status)) {
+      return sendJson(response, 400, { error: "Invalid help-call status" });
+    }
+    const call = db.prepare("SELECT * FROM help_calls WHERE id = ?").get(Number(helpCallStatusMatch[1]));
+    if (!call) return sendJson(response, 404, { error: "Help call not found" });
+    const scopedTeacherId = getTeacherScope(session);
+    if (scopedTeacherId !== null && call.teacher_id !== scopedTeacherId) {
+      return sendJson(response, 403, { error: "Help call is outside your assigned roster" });
+    }
+    db.prepare("UPDATE help_calls SET status = ? WHERE id = ?").run(body.status, call.id);
+    logAudit(db, session.userId, "update_help_call", "help_call", call.id, { status: body.status });
+    return sendJson(response, 200, { ok: true });
+  }
+
+  if (pathname === "/api/student/me" && request.method === "GET") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const analysis = getStudentAnalysis(db, session.studentId);
     if (!analysis) return sendJson(response, 404, { error: "Student not found" });
     const todaySubmissions = db.prepare(`
       SELECT period, review_status, file_name, uploaded_at
       FROM practice_submissions
       WHERE student_id = ? AND date(uploaded_at) = date('now')
       ORDER BY uploaded_at DESC
-    `).all(Number(studentAppMatch[1]));
+    `).all(session.studentId);
+    const preferences = db.prepare(`
+      SELECT morning_reminder, evening_reminder, parent_updates
+      FROM student_preferences
+      WHERE student_id = ?
+    `).get(session.studentId) || {
+      morning_reminder: 1,
+      evening_reminder: 1,
+      parent_updates: 1
+    };
     return sendJson(response, 200, {
       profile: analysis.student,
+      preferences: {
+        morningReminder: Boolean(preferences.morning_reminder),
+        eveningReminder: Boolean(preferences.evening_reminder),
+        parentUpdates: Boolean(preferences.parent_updates)
+      },
       latestSkills: analysis.latestSkills,
       todaySubmissions,
       feedback: analysis.submissions.filter((submission) => submission.review_status === "reviewed").slice(0, 5),
@@ -449,13 +966,20 @@ async function handleApi(request, response, url) {
     });
   }
 
-  const submissionMatch = pathname.match(/^\/api\/student-app\/(\d+)\/practice-submissions$/);
-  if (submissionMatch && request.method === "POST") {
-    const studentId = Number(submissionMatch[1]);
+  if (pathname === "/api/student/me/practice-submissions" && request.method === "POST") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const studentId = session.studentId;
     const student = db.prepare("SELECT * FROM students WHERE id = ?").get(studentId);
     if (!student) return sendJson(response, 404, { error: "Student not found" });
     const body = await readJson(request);
     if (!["morning", "evening"].includes(body.period)) return sendJson(response, 400, { error: "Invalid practice period" });
+    const existingSubmission = db.prepare(`
+      SELECT id
+      FROM practice_submissions
+      WHERE student_id = ? AND period = ? AND date(uploaded_at) = date('now')
+    `).get(studentId, body.period);
+    if (existingSubmission) return sendJson(response, 409, { error: `${body.period} practice was already submitted today` });
     const uploadedAt = new Date().toISOString();
     const fileName = String(body.fileName || `${body.period}-practice.mp4`);
     const storageKey = `students/${studentId}/week-${student.current_week}/${randomUUID()}-${fileName.replaceAll(/[^a-zA-Z0-9._-]/g, "-")}`;
@@ -478,9 +1002,10 @@ async function handleApi(request, response, url) {
     return sendJson(response, 201, { id: Number(result.lastInsertRowid), storageKey, uploadedAt, reviewStatus: "pending" });
   }
 
-  const helpCallMatch = pathname.match(/^\/api\/student-app\/(\d+)\/help-calls$/);
-  if (helpCallMatch && request.method === "POST") {
-    const studentId = Number(helpCallMatch[1]);
+  if (pathname === "/api/student/me/help-calls" && request.method === "POST") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const studentId = session.studentId;
     const student = db.prepare("SELECT * FROM students WHERE id = ?").get(studentId);
     if (!student) return sendJson(response, 404, { error: "Student not found" });
     const body = await readJson(request);
@@ -492,10 +1017,12 @@ async function handleApi(request, response, url) {
     return sendJson(response, 201, { id: Number(result.lastInsertRowid), scheduledAt, status: "scheduled" });
   }
 
-  const cancelHelpCallMatch = pathname.match(/^\/api\/student-app\/(\d+)\/help-calls\/(\d+)\/cancel$/);
+  const cancelHelpCallMatch = pathname.match(/^\/api\/student\/me\/help-calls\/(\d+)\/cancel$/);
   if (cancelHelpCallMatch && request.method === "POST") {
-    const studentId = Number(cancelHelpCallMatch[1]);
-    const helpCallId = Number(cancelHelpCallMatch[2]);
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const studentId = session.studentId;
+    const helpCallId = Number(cancelHelpCallMatch[1]);
     const result = db.prepare(`
       UPDATE help_calls
       SET status = 'cancelled'
@@ -505,14 +1032,57 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, { ok: true });
   }
 
-  const progressMatch = pathname.match(/^\/api\/student-app\/(\d+)\/progress$/);
-  if (progressMatch && request.method === "POST") {
-    const studentId = Number(progressMatch[1]);
+  if (pathname === "/api/student/me/progress" && request.method === "POST") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const studentId = session.studentId;
     const body = await readJson(request);
     const week = Math.max(1, Math.min(12, Number(body.currentWeek) || 1));
     db.prepare("UPDATE students SET current_week = ? WHERE id = ?").run(week, studentId);
     recalculateStudent(db, studentId);
     return sendJson(response, 200, { ok: true, currentWeek: week });
+  }
+
+  if (pathname === "/api/student/me/profile" && request.method === "PATCH") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const body = await readJson(request);
+    const name = String(body.name || "").trim();
+    const goal = String(body.goal || "").trim();
+    if (name.length < 2 || goal.length < 3) {
+      return sendJson(response, 400, { error: "Name and learning goal are required" });
+    }
+    db.prepare("UPDATE students SET name = ?, goal = ? WHERE id = ?").run(name, goal, session.studentId);
+    logAudit(db, null, "update_student_profile", "student", session.studentId);
+    return sendJson(response, 200, { ok: true, profile: getStudentAnalysis(db, session.studentId).student });
+  }
+
+  if (pathname === "/api/student/me/preferences" && request.method === "PATCH") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const body = await readJson(request);
+    const values = {
+      morningReminder: body.morningReminder ? 1 : 0,
+      eveningReminder: body.eveningReminder ? 1 : 0,
+      parentUpdates: body.parentUpdates ? 1 : 0
+    };
+    db.prepare(`
+      INSERT INTO student_preferences (
+        student_id, morning_reminder, evening_reminder, parent_updates, updated_at
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(student_id) DO UPDATE SET
+        morning_reminder = excluded.morning_reminder,
+        evening_reminder = excluded.evening_reminder,
+        parent_updates = excluded.parent_updates,
+        updated_at = excluded.updated_at
+    `).run(
+      session.studentId,
+      values.morningReminder,
+      values.eveningReminder,
+      values.parentUpdates,
+      new Date().toISOString()
+    );
+    return sendJson(response, 200, { ok: true });
   }
 
   return sendJson(response, 404, { error: "API route not found" });
@@ -522,6 +1092,7 @@ function serveStatic(request, response, url) {
   let pathname = decodeURIComponent(url.pathname);
   if (pathname === "/") pathname = "/index.html";
   if (pathname === "/admin") pathname = "/admin.html";
+  if (pathname === "/teacher") pathname = "/teacher.html";
 
   const safePath = normalize(pathname).replace(/^(\.\.[/\\])+/, "");
   const filePath = resolve(join(ROOT, safePath.replace(/^[/\\]/, "")));
@@ -559,4 +1130,5 @@ const server = createServer(async (request, response) => {
 server.listen(PORT, HOST, () => {
   console.log(`MUSIC SCHOOL OTS running at http://${HOST}:${PORT}`);
   console.log(`Admin portal: http://${HOST}:${PORT}/admin`);
+  console.log(`Teacher portal: http://${HOST}:${PORT}/teacher`);
 });

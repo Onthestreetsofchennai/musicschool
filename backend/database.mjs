@@ -41,6 +41,7 @@ export function createDatabase(databasePath) {
   db.exec("PRAGMA busy_timeout = 5000;");
   createSchema(db);
   seedDatabase(db);
+  seedStudentIdentityData(db);
   recalculateAllStudents(db);
   return db;
 }
@@ -79,6 +80,49 @@ function createSchema(db) {
       parent_email TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS student_accounts (
+      id INTEGER PRIMARY KEY,
+      student_id INTEGER NOT NULL UNIQUE REFERENCES students(id),
+      email TEXT NOT NULL UNIQUE,
+      email_verified_at TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS student_preferences (
+      student_id INTEGER PRIMARY KEY REFERENCES students(id),
+      morning_reminder INTEGER NOT NULL DEFAULT 1,
+      evening_reminder INTEGER NOT NULL DEFAULT 1,
+      parent_updates INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS otp_challenges (
+      id INTEGER PRIMARY KEY,
+      student_account_id INTEGER NOT NULL REFERENCES student_accounts(id),
+      code_hash TEXT NOT NULL,
+      code_salt TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 5,
+      consumed_at TEXT,
+      delivery_status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id INTEGER PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      principal_type TEXT NOT NULL CHECK (principal_type IN ('staff', 'student')),
+      user_id INTEGER REFERENCES users(id),
+      student_id INTEGER REFERENCES students(id),
+      role TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      revoked_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS courses (
@@ -211,6 +255,8 @@ function createSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_submissions_student_date ON practice_submissions(student_id, uploaded_at);
     CREATE INDEX IF NOT EXISTS idx_sessions_student_date ON live_sessions(student_id, scheduled_at);
     CREATE INDEX IF NOT EXISTS idx_alerts_student_resolved ON student_alerts(student_id, resolved);
+    CREATE INDEX IF NOT EXISTS idx_otp_account_created ON otp_challenges(student_account_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash, revoked_at, expires_at);
   `);
 }
 
@@ -302,11 +348,61 @@ function seedDatabase(db) {
 
     seedSessions(db, students);
     seedPracticeAndReviews(db, students);
+    seedHelpCalls(db);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
+}
+
+function seedStudentIdentityData(db) {
+  const accounts = [
+    [1, "riya@ots.test"],
+    [2, "kabir@ots.test"],
+    [3, "meera.student@ots.test"],
+    [4, "aarav@ots.test"],
+    [5, "nina@ots.test"]
+  ];
+  const insertAccount = db.prepare(`
+    INSERT OR IGNORE INTO student_accounts (
+      student_id, email, email_verified_at, active, created_at
+    ) VALUES (?, ?, NULL, 1, ?)
+  `);
+  const insertPreferences = db.prepare(`
+    INSERT OR IGNORE INTO student_preferences (
+      student_id, morning_reminder, evening_reminder, parent_updates, updated_at
+    ) VALUES (?, 1, 1, 1, ?)
+  `);
+  for (const [studentId, email] of accounts) {
+    const student = db.prepare("SELECT id FROM students WHERE id = ?").get(studentId);
+    if (!student) continue;
+    insertAccount.run(studentId, email, nowIso());
+    insertPreferences.run(studentId, nowIso());
+  }
+}
+
+function seedHelpCalls(db) {
+  const insertCall = db.prepare(`
+    INSERT INTO help_calls (student_id, teacher_id, topic, scheduled_at, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  insertCall.run(
+    1,
+    1,
+    "Clean G-to-C transitions and relaxed wrist position",
+    dateAtOffset(2, 18, 30),
+    "scheduled",
+    nowIso()
+  );
+  insertCall.run(
+    3,
+    2,
+    "Timing and posture correction before the next live session",
+    dateAtOffset(1, 19, 0),
+    "scheduled",
+    nowIso()
+  );
 }
 
 function seedSessions(db, students) {
@@ -583,6 +679,8 @@ export function getStudentAnalysis(db, studentId) {
   const student = db.prepare(`
     SELECT
       s.*,
+      account.email,
+      account.email_verified_at,
       u.name AS teacher_name,
       t.instrument AS teacher_instrument,
       ps.practice_score,
@@ -592,6 +690,7 @@ export function getStudentAnalysis(db, studentId) {
       ps.overall_score,
       ps.status AS analysis_status
     FROM students s
+    LEFT JOIN student_accounts account ON account.student_id = s.id
     JOIN teachers t ON t.id = s.assigned_teacher_id
     JOIN users u ON u.id = t.user_id
     LEFT JOIN progress_snapshots ps

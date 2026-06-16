@@ -13,47 +13,42 @@
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
 
-  <div class="onboarding" id="onboarding">
-    <div class="onboarding-panel">
+  <div class="onboarding" id="student-auth">
+    <div class="onboarding-panel auth-panel">
       <div class="brand-lockup">
         <span class="brand-mark">OTS</span>
         <span>
           <strong>MUSIC SCHOOL</strong>
-          <small>Learn with accountability</small>
+          <small>Student login</small>
         </span>
       </div>
       <div class="onboarding-copy">
-        <p class="eyebrow">YOUR 12-WEEK JOURNEY</p>
-        <h1>Build a real music habit.</h1>
-        <p>Two live sessions every week, two 10-minute practice videos every day, and feedback from your assigned teacher.</p>
+        <p class="eyebrow">WELCOME BACK</p>
+        <h1>Sign in to your course.</h1>
+        <p>Enter the email registered with MUSIC SCHOOL OTS. We will send a secure six-digit login code.</p>
       </div>
-      <form id="onboarding-form" class="stack-form">
+      <form id="student-email-form" class="stack-form">
         <label>
-          Student name
-          <input id="student-name-input" name="name" value="Riya" autocomplete="name" required>
+          Registered email address
+          <input id="student-login-email" name="email" type="email" autocomplete="email" placeholder="student@example.com" required>
         </label>
-        <label>
-          Instrument
-          <select id="instrument-input" name="instrument">
-            <option>Guitar</option>
-            <option>Keyboard</option>
-            <option>Vocals</option>
-            <option>Drums</option>
-            <option>Violin</option>
-          </select>
-        </label>
-        <label>
-          Main goal
-          <select id="goal-input" name="goal">
-            <option>Play complete songs confidently</option>
-            <option>Build strong musical foundations</option>
-            <option>Prepare for a performance</option>
-            <option>Prepare for music examinations</option>
-          </select>
-        </label>
-        <button class="button button-primary button-large" type="submit">Start my course</button>
+        <button class="button button-primary button-large" type="submit">Send login code</button>
       </form>
-      <p class="microcopy">OTS assigns your teacher after enrollment.</p>
+      <form id="student-otp-form" class="stack-form" hidden>
+        <p class="auth-destination">Code sent to <strong id="student-otp-email"></strong></p>
+        <label>
+          Six-digit login code
+          <input id="student-login-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required>
+        </label>
+        <button class="button button-primary button-large" type="submit">Verify and sign in</button>
+        <button class="text-button auth-back" id="student-change-email" type="button">Use a different email</button>
+      </form>
+      <div class="development-otp" id="development-otp" hidden>
+        <span>Local development code</span>
+        <strong id="development-otp-code"></strong>
+      </div>
+      <p class="auth-error" id="student-auth-error" hidden></p>
+      <p class="microcopy">Demo student: <strong>riya@ots.test</strong>. Local mode displays the OTP here; production sends it by email.</p>
     </div>
   </div>
 
@@ -175,7 +170,7 @@
                   <div class="session-copy">
                     <span class="tag tag-purple">Session 1</span>
                     <h3>Chord shapes and timing</h3>
-                    <p>6:00 PM - 6:45 PM with Arjun K.</p>
+                    <p>6:00 PM - 6:45 PM with <span data-teacher-display-name>Your teacher</span></p>
                   </div>
                   <button class="button button-secondary join-session">Join</button>
                 </article>
@@ -187,7 +182,7 @@
                   <div class="session-copy">
                     <span class="tag tag-yellow">Session 2</span>
                     <h3>Strumming and weekly review</h3>
-                    <p>6:00 PM - 6:45 PM with Arjun K.</p>
+                    <p>6:00 PM - 6:45 PM with <span data-teacher-display-name>Your teacher</span></p>
                   </div>
                   <button class="button button-secondary join-session">Join</button>
                 </article>
@@ -224,10 +219,10 @@
           </div>
 
           <section class="teacher-banner">
-            <div class="teacher-avatar">AK</div>
+            <div class="teacher-avatar" data-teacher-initials>OT</div>
             <div>
               <p class="eyebrow">YOUR ASSIGNED TEACHER</p>
-              <h2>Arjun K.</h2>
+              <h2 data-teacher-display-name>Your teacher</h2>
               <p>“Keep your wrist relaxed during chord changes. I’ll check the same point in your evening upload.”</p>
             </div>
             <button class="button button-primary open-help-call">Need help?</button>
@@ -283,7 +278,7 @@
           </div>
 
           <div class="teacher-focus">
-            <div class="teacher-avatar small">AK</div>
+            <div class="teacher-avatar small" data-teacher-initials>OT</div>
             <div>
               <span class="tag tag-purple">Teacher focus</span>
               <p>Keep your wrist relaxed and practise the G-to-C change slowly.</p>
@@ -348,7 +343,7 @@
           <div class="page-intro">
             <div>
               <p class="eyebrow">COMMENTS AND CORRECTIONS</p>
-              <h1>Feedback from Arjun</h1>
+              <h1>Feedback from <span data-teacher-first-name>your teacher</span></h1>
               <p>Use each review as the focus for your next practice check-in.</p>
             </div>
             <button class="button button-primary open-help-call">Set up a help call</button>
@@ -358,7 +353,7 @@
             <div>
               <span class="tag tag-green">Help call scheduled</span>
               <h3 id="scheduled-call-title">Wednesday at 7:00 PM</h3>
-              <p>Arjun will meet you for a focused correction call.</p>
+              <p><span data-teacher-first-name>Your teacher</span> will meet you for a focused correction call.</p>
             </div>
             <button class="text-button" id="cancel-help-call">Cancel</button>
           </div>
@@ -385,6 +380,10 @@
                 </div>
               </div>
               <form id="profile-form" class="stack-form compact">
+                <label>
+                  Login email
+                  <input id="profile-email" type="email" disabled>
+                </label>
                 <label>
                   Student name
                   <input id="profile-name" required>
@@ -428,16 +427,16 @@
           </div>
 
           <section class="teacher-banner profile-teacher">
-            <div class="teacher-avatar">AK</div>
+            <div class="teacher-avatar" data-teacher-initials>OT</div>
             <div>
               <p class="eyebrow">ASSIGNED TEACHER</p>
-              <h2>Arjun K.</h2>
+              <h2 data-teacher-display-name>Your teacher</h2>
               <p>Available for two scheduled sessions weekly and focused help calls when needed.</p>
             </div>
             <button class="button button-secondary open-help-call">Request call</button>
           </section>
 
-          <button class="danger-link" id="reset-app">Reset demo data</button>
+          <button class="danger-link" id="student-logout">Sign out of student account</button>
         </section>
       </main>
     </div>
@@ -471,7 +470,7 @@
       <button class="modal-close" value="cancel" aria-label="Close">×</button>
       <p class="eyebrow">EXTRA TEACHER SUPPORT</p>
       <h2>Set up a help call</h2>
-      <p>Choose a 20-minute slot with Arjun for a focused correction or question.</p>
+      <p>Choose a 20-minute slot with <span data-teacher-first-name>your teacher</span> for a focused correction or question.</p>
       <div class="slot-grid" id="slot-grid"></div>
       <label>
         What do you need help with?

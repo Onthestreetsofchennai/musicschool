@@ -1,5 +1,5 @@
 const STORAGE_KEY = "musicSchoolOTSStateV1";
-const DEMO_STUDENT_ID = 1;
+const STUDENT_TOKEN_KEY = "otsStudentToken";
 
 const courseWeeks = [
   {
@@ -79,9 +79,11 @@ const courseWeeks = [
 const defaultState = {
   onboarded: false,
   profile: {
-    name: "Riya",
+    name: "Student",
+    email: "",
     instrument: "Guitar",
-    goal: "Play complete songs confidently"
+    goal: "Play complete songs confidently",
+    teacherName: "Your teacher"
   },
   currentWeek: 3,
   completedWeeks: [1, 2],
@@ -139,6 +141,8 @@ const feedbackItems = [
 ];
 
 let state = loadState();
+let studentToken = localStorage.getItem(STUDENT_TOKEN_KEY) || "";
+let pendingLoginEmail = "";
 let selectedHelpSlot = null;
 let toastTimer;
 const temporaryVideoUrls = {};
@@ -146,16 +150,50 @@ let backendFeedback = null;
 let backendConnected = false;
 
 async function apiRequest(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+  if (studentToken) headers.Authorization = `Bearer ${studentToken}`;
   const response = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
+    headers,
     ...options
   });
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401 && !path.startsWith("/api/student-auth/")) {
+    clearStudentSession();
+    setAuthVisible(true);
+  }
   if (!response.ok) throw new Error(payload.error || "The server could not complete this request.");
   return payload;
+}
+
+function clearStudentSession() {
+  studentToken = "";
+  backendConnected = false;
+  localStorage.removeItem(STUDENT_TOKEN_KEY);
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+function setAuthVisible(visible) {
+  const auth = document.querySelector("#student-auth");
+  const appShell = document.querySelector("#app-shell");
+  auth.hidden = !visible;
+  appShell.toggleAttribute("inert", visible);
+  appShell.setAttribute("aria-hidden", String(visible));
+}
+
+function setAuthStep(step) {
+  document.querySelector("#student-email-form").hidden = step !== "email";
+  document.querySelector("#student-otp-form").hidden = step !== "otp";
+  document.querySelector("#development-otp").hidden = true;
+  document.querySelector("#student-auth-error").hidden = true;
+}
+
+function showAuthError(message) {
+  const error = document.querySelector("#student-auth-error");
+  error.textContent = message;
+  error.hidden = false;
 }
 
 function formatBackendDate(value) {
@@ -171,15 +209,26 @@ function formatBackendDate(value) {
 
 async function syncStudentFromBackend() {
   try {
-    const data = await apiRequest(`/api/student-app/${DEMO_STUDENT_ID}`);
+    const data = await apiRequest("/api/student/me");
     backendConnected = true;
     state.onboarded = true;
     state.profile.name = data.profile.name;
+    state.profile.email = data.profile.email;
     state.profile.instrument = data.profile.instrument;
     state.profile.goal = data.profile.goal;
+    state.profile.teacherName = data.profile.teacher_name || "Your teacher";
     state.currentWeek = data.profile.current_week;
     state.completedWeeks = Array.from({ length: Math.max(0, state.currentWeek - 1) }, (_, index) => index + 1);
     state.reviews = data.feedback.length;
+    state.settings = {
+      morningReminder: data.preferences.morningReminder,
+      eveningReminder: data.preferences.eveningReminder,
+      parentUpdates: data.preferences.parentUpdates
+    };
+    state.checkins = {
+      morning: { status: "pending", fileName: "", time: "" },
+      evening: { status: "pending", fileName: "", time: "" }
+    };
 
     for (const period of ["morning", "evening"]) {
       const submission = data.todaySubmissions.find((item) => item.period === period);
@@ -209,9 +258,15 @@ async function syncStudentFromBackend() {
 
     saveState();
     renderAll();
-    setOnboardingVisible(false);
-  } catch {
+    setAuthVisible(false);
+  } catch (error) {
     backendConnected = false;
+    if (!studentToken) {
+      setAuthVisible(true);
+      setAuthStep("email");
+    } else {
+      showAuthError(error.message);
+    }
   }
 }
 
@@ -244,14 +299,6 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
 }
 
-function setOnboardingVisible(visible) {
-  const onboarding = document.querySelector("#onboarding");
-  const appShell = document.querySelector("#app-shell");
-  onboarding.hidden = !visible;
-  appShell.toggleAttribute("inert", visible);
-  appShell.setAttribute("aria-hidden", String(visible));
-}
-
 function navigate(viewName) {
   document.querySelectorAll(".view").forEach((view) => {
     view.classList.toggle("is-active", view.id === `view-${viewName}`);
@@ -268,6 +315,38 @@ function navigate(viewName) {
 
 function calculateProgress() {
   return Math.round((state.completedWeeks.length / 12) * 100);
+}
+
+function teacherIdentity() {
+  const fullName = state.profile.teacherName || "Your teacher";
+  if (fullName === "Your teacher") {
+    return {
+      fullName,
+      firstName: "Your teacher",
+      displayName: "Your teacher",
+      initials: "OT"
+    };
+  }
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    fullName,
+    firstName: parts[0] || "Your teacher",
+    displayName: parts.length > 1 ? `${parts[0]} ${parts[1].charAt(0)}.` : fullName,
+    initials: parts.slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "OT"
+  };
+}
+
+function renderTeacherIdentity() {
+  const teacher = teacherIdentity();
+  document.querySelectorAll("[data-teacher-display-name]").forEach((element) => {
+    element.textContent = teacher.displayName;
+  });
+  document.querySelectorAll("[data-teacher-first-name]").forEach((element) => {
+    element.textContent = teacher.firstName;
+  });
+  document.querySelectorAll("[data-teacher-initials]").forEach((element) => {
+    element.textContent = teacher.initials;
+  });
 }
 
 function renderHome() {
@@ -394,9 +473,10 @@ function renderHistory() {
 
 function renderFeedback() {
   const items = backendFeedback?.length ? backendFeedback : feedbackItems;
+  const teacher = teacherIdentity();
   document.querySelector("#feedback-list").innerHTML = items.map((item) => `
     <article class="feedback-card">
-      <div class="teacher-avatar small">AK</div>
+      <div class="teacher-avatar small">${teacher.initials}</div>
       <div>
         <span class="tag tag-purple">${item.period}</span>
         <h3>${item.title}</h3>
@@ -425,6 +505,7 @@ function renderProfile() {
   document.querySelector("#profile-display-name").textContent = name;
   document.querySelector("#profile-display-instrument").textContent = state.profile.instrument;
   document.querySelector("#profile-display-week").textContent = state.currentWeek;
+  document.querySelector("#profile-email").value = state.profile.email || "";
   document.querySelector("#profile-name").value = name;
   document.querySelector("#profile-goal").value = state.profile.goal;
 
@@ -436,6 +517,7 @@ function renderProfile() {
 
 function renderAll() {
   document.querySelector("#today-label").textContent = formatToday();
+  renderTeacherIdentity();
   renderHome();
   renderCourse();
   renderCheckins();
@@ -509,7 +591,7 @@ async function submitUpload(period) {
   button.disabled = true;
   try {
     if (backendConnected) {
-      await apiRequest(`/api/student-app/${DEMO_STUDENT_ID}/practice-submissions`, {
+      await apiRequest("/api/student/me/practice-submissions", {
         method: "POST",
         body: JSON.stringify({
           period,
@@ -526,7 +608,7 @@ async function submitUpload(period) {
     saveState();
     button.hidden = true;
     renderAll();
-    showToast(`${period === "morning" ? "Morning" : "Evening"} video submitted to Arjun for review.`);
+    showToast(`${period === "morning" ? "Morning" : "Evening"} video submitted to ${teacherIdentity().firstName} for review.`);
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -546,7 +628,7 @@ async function completeWeek(weekNumber) {
   renderAll();
   if (backendConnected) {
     try {
-      await apiRequest(`/api/student-app/${DEMO_STUDENT_ID}/progress`, {
+      await apiRequest("/api/student/me/progress", {
         method: "POST",
         body: JSON.stringify({ currentWeek: state.currentWeek })
       });
@@ -558,21 +640,85 @@ async function completeWeek(weekNumber) {
   showToast(`Week ${weekNumber} completed. Week ${state.currentWeek} is now active.`);
 }
 
+async function requestStudentOtp(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  pendingLoginEmail = document.querySelector("#student-login-email").value.trim().toLowerCase();
+  button.disabled = true;
+  document.querySelector("#student-auth-error").hidden = true;
+  try {
+    const result = await apiRequest("/api/student-auth/request-otp", {
+      method: "POST",
+      body: JSON.stringify({ email: pendingLoginEmail })
+    });
+    document.querySelector("#student-otp-email").textContent = pendingLoginEmail;
+    document.querySelector("#student-email-form").hidden = true;
+    document.querySelector("#student-otp-form").hidden = false;
+    if (result.developmentOtp) {
+      document.querySelector("#development-otp-code").textContent = result.developmentOtp;
+      document.querySelector("#development-otp").hidden = false;
+    }
+    document.querySelector("#student-login-otp").focus();
+  } catch (error) {
+    showAuthError(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function verifyStudentOtp(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  const otp = document.querySelector("#student-login-otp").value.trim();
+  button.disabled = true;
+  document.querySelector("#student-auth-error").hidden = true;
+  try {
+    const result = await apiRequest("/api/student-auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ email: pendingLoginEmail, otp })
+    });
+    studentToken = result.token;
+    localStorage.setItem(STUDENT_TOKEN_KEY, studentToken);
+    state = structuredClone(defaultState);
+    backendFeedback = null;
+    await syncStudentFromBackend();
+    showToast(`Welcome back, ${result.student.name}.`);
+  } catch (error) {
+    showAuthError(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function logoutStudent() {
+  try {
+    if (studentToken) await apiRequest("/api/student-auth/logout", { method: "POST", body: "{}" });
+  } catch {
+    // Local logout must still complete if the session has already expired.
+  }
+  clearStudentSession();
+  state = structuredClone(defaultState);
+  backendFeedback = null;
+  pendingLoginEmail = "";
+  document.querySelector("#student-login-email").value = "";
+  document.querySelector("#student-login-otp").value = "";
+  setAuthStep("email");
+  setAuthVisible(true);
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => navigate(button.dataset.view));
   });
 
-  document.querySelector("#onboarding-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    state.profile.name = document.querySelector("#student-name-input").value.trim();
-    state.profile.instrument = document.querySelector("#instrument-input").value;
-    state.profile.goal = document.querySelector("#goal-input").value;
-    state.onboarded = true;
-    saveState();
-    setOnboardingVisible(false);
-    renderAll();
-    showToast(`Welcome, ${state.profile.name}. Your 12-week journey is ready.`);
+  document.querySelector("#student-email-form").addEventListener("submit", requestStudentOtp);
+  document.querySelector("#student-otp-form").addEventListener("submit", verifyStudentOtp);
+  document.querySelector("#student-change-email").addEventListener("click", () => {
+    pendingLoginEmail = "";
+    document.querySelector("#student-login-otp").value = "";
+    setAuthStep("email");
   });
 
   document.querySelectorAll("[data-upload-input]").forEach((input) => {
@@ -611,7 +757,7 @@ function bindEvents() {
     const topic = document.querySelector("#help-topic").value.trim();
     try {
       if (backendConnected) {
-        const result = await apiRequest(`/api/student-app/${DEMO_STUDENT_ID}/help-calls`, {
+        const result = await apiRequest("/api/student/me/help-calls", {
           method: "POST",
           body: JSON.stringify({ scheduledAt: selectedHelpSlot.iso, topic })
         });
@@ -624,7 +770,7 @@ function bindEvents() {
       document.querySelector("#help-topic").value = "";
       renderFeedback();
       navigate("feedback");
-      showToast("Your help call with Arjun is scheduled.");
+      showToast(`Your help call with ${teacherIdentity().firstName} is scheduled.`);
     } catch (error) {
       showToast(error.message);
     }
@@ -633,7 +779,7 @@ function bindEvents() {
   document.querySelector("#cancel-help-call").addEventListener("click", async () => {
     try {
       if (backendConnected && state.helpCall?.id) {
-        await apiRequest(`/api/student-app/${DEMO_STUDENT_ID}/help-calls/${state.helpCall.id}/cancel`, {
+        await apiRequest(`/api/student/me/help-calls/${state.helpCall.id}/cancel`, {
           method: "POST"
         });
       }
@@ -646,40 +792,58 @@ function bindEvents() {
     }
   });
 
-  document.querySelector("#profile-form").addEventListener("submit", (event) => {
+  document.querySelector("#profile-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    state.profile.name = document.querySelector("#profile-name").value.trim();
-    state.profile.goal = document.querySelector("#profile-goal").value.trim();
-    saveState();
-    renderAll();
-    showToast("Profile updated.");
+    try {
+      const result = await apiRequest("/api/student/me/profile", {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: document.querySelector("#profile-name").value.trim(),
+          goal: document.querySelector("#profile-goal").value.trim()
+        })
+      });
+      state.profile.name = result.profile.name;
+      state.profile.goal = result.profile.goal;
+      saveState();
+      renderAll();
+      showToast("Profile updated in the database.");
+    } catch (error) {
+      showToast(error.message);
+    }
   });
 
   document.querySelectorAll("[data-setting]").forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
+    checkbox.addEventListener("change", async () => {
       state.settings[checkbox.dataset.setting] = checkbox.checked;
       saveState();
-      showToast("Reminder preference saved.");
+      try {
+        await apiRequest("/api/student/me/preferences", {
+          method: "PATCH",
+          body: JSON.stringify(state.settings)
+        });
+        showToast("Reminder preference saved.");
+      } catch (error) {
+        showToast(error.message);
+      }
     });
   });
 
   document.querySelector("#notification-button").addEventListener("click", () => {
-    showToast("Evening practice is due by 8:00 PM. Arjun reviewed your morning upload.");
+    showToast(`Evening practice is due by 8:00 PM. ${teacherIdentity().firstName} reviewed your morning upload.`);
   });
 
-  document.querySelector("#reset-app").addEventListener("click", () => {
-    if (!window.confirm("Reset all local demo progress and return to onboarding?")) return;
-    localStorage.removeItem(STORAGE_KEY);
-    state = structuredClone(defaultState);
-    window.location.reload();
-  });
+  document.querySelector("#student-logout").addEventListener("click", logoutStudent);
 }
 
 async function init() {
   bindEvents();
   renderAll();
-  setOnboardingVisible(!state.onboarded);
-  await syncStudentFromBackend();
+  if (studentToken) {
+    await syncStudentFromBackend();
+  } else {
+    setAuthStep("email");
+    setAuthVisible(true);
+  }
 
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     navigator.serviceWorker.register("./service-worker.js").catch(() => {});

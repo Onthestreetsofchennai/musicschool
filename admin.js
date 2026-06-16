@@ -4,6 +4,7 @@ let adminToken = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
 let adminUser = null;
 let dashboardData = null;
 let toastTimer;
+let enrollmentTeachers = [];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -50,7 +51,18 @@ function setLoggedIn(loggedIn) {
   document.querySelector("#admin-shell").hidden = !loggedIn;
 }
 
-function logout(showMessage = true) {
+async function logout(showMessage = true) {
+  const tokenToRevoke = adminToken;
+  if (tokenToRevoke) {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${tokenToRevoke}`,
+        "Content-Type": "application/json"
+      },
+      body: "{}"
+    }).catch(() => {});
+  }
   adminToken = "";
   adminUser = null;
   localStorage.removeItem(ADMIN_TOKEN_KEY);
@@ -164,6 +176,59 @@ async function loadStudents() {
     : '<tr><td colspan="8"><div class="empty-state">No students match these filters.</div></td></tr>';
 }
 
+async function openCreateStudent() {
+  const error = document.querySelector("#create-student-error");
+  error.hidden = true;
+  if (!enrollmentTeachers.length) {
+    const data = await api("/api/teachers");
+    enrollmentTeachers = data.teachers;
+  }
+  renderEnrollmentTeachers();
+  document.querySelector("#create-student-start").value = new Date().toISOString().slice(0, 10);
+  document.querySelector("#create-student-modal").showModal();
+}
+
+function renderEnrollmentTeachers() {
+  const instrument = document.querySelector("#create-student-instrument").value;
+  const matchingTeachers = enrollmentTeachers.filter((teacher) => teacher.instrument === instrument);
+  document.querySelector("#create-student-teacher").innerHTML = matchingTeachers.map((teacher) => (
+    `<option value="${teacher.id}">${escapeHtml(teacher.name)} - ${escapeHtml(teacher.instrument)}</option>`
+  )).join("");
+}
+
+async function createStudent(event) {
+  event.preventDefault();
+  const error = document.querySelector("#create-student-error");
+  const submitButton = event.currentTarget.querySelector("button[type='submit']");
+  error.hidden = true;
+  submitButton.disabled = true;
+  try {
+    await api("/api/students", {
+      method: "POST",
+      body: JSON.stringify({
+        name: document.querySelector("#create-student-name").value.trim(),
+        email: document.querySelector("#create-student-email").value.trim(),
+        ageGroup: document.querySelector("#create-student-age").value,
+        instrument: document.querySelector("#create-student-instrument").value,
+        goal: document.querySelector("#create-student-goal").value.trim(),
+        teacherId: Number(document.querySelector("#create-student-teacher").value),
+        courseStartDate: document.querySelector("#create-student-start").value,
+        parentName: document.querySelector("#create-parent-name").value.trim(),
+        parentEmail: document.querySelector("#create-parent-email").value.trim()
+      })
+    });
+    event.currentTarget.reset();
+    document.querySelector("#create-student-modal").close();
+    await Promise.all([loadStudents(), loadDashboard()]);
+    showToast("Student account created. OTP login is ready.");
+  } catch (createError) {
+    error.textContent = createError.message;
+    error.hidden = false;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 function scoreBar(score) {
   const value = Math.round(score || 0);
   return `<div class="score-cell"><div class="mini-track"><span style="width:${value}%"></span></div><strong>${value}</strong></div>`;
@@ -233,6 +298,7 @@ async function openStudent(studentId) {
         <h3>Student details</h3>
         <div class="detail-list">
           <div class="detail-list-row"><span>Goal</span><strong>${escapeHtml(student.goal)}</strong></div>
+          <div class="detail-list-row"><span>Login email</span><strong>${escapeHtml(student.email || "Not linked")}</strong></div>
           <div class="detail-list-row"><span>Age group</span><strong>${escapeHtml(student.age_group)}</strong></div>
           <div class="detail-list-row"><span>Parent</span><strong>${escapeHtml(student.parent_name || "Not linked")}</strong></div>
           <div class="detail-list-row"><span>Course start</span><strong>${escapeHtml(student.course_start_date)}</strong></div>
@@ -385,6 +451,9 @@ function bindEvents() {
     if (event.key === "Enter") loadStudents();
   });
   document.querySelector("#logout-button").addEventListener("click", () => logout());
+  document.querySelector("#open-create-student").addEventListener("click", openCreateStudent);
+  document.querySelector("#create-student-form").addEventListener("submit", createStudent);
+  document.querySelector("#create-student-instrument").addEventListener("change", renderEnrollmentTeachers);
   document.querySelector("#review-form").addEventListener("submit", submitReview);
 
   document.querySelectorAll("[data-rating]").forEach((input) => {
@@ -414,6 +483,7 @@ function renderAdminUser() {
   document.querySelector("#admin-user-name").textContent = adminUser.name;
   document.querySelector("#admin-user-role").textContent = adminUser.role.replaceAll("_", " ");
   document.querySelector("#admin-avatar").textContent = initials(adminUser.name);
+  document.querySelector("#open-create-student").hidden = adminUser.role === "teacher";
 }
 
 async function restoreSession() {
