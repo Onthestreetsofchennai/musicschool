@@ -22,6 +22,9 @@ Node API host
 4. Run `npm run neon:migrate`.
 
 The SQL source is `neon/schema.sql`.
+When `DATABASE_URL` is present, the production API automatically uses Neon.
+Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `TEACHER_EMAIL` and `TEACHER_PASSWORD` to
+create the first staff accounts.
 
 ## 2. Cloudflare OTP email
 

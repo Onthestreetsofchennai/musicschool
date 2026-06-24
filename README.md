@@ -109,9 +109,9 @@ npm install
 npm run neon:migrate
 ```
 
-The migration creates the production PostgreSQL schema. The current local
-server remains on SQLite until the production Neon API adapter is connected to
-your actual Neon project.
+The migration creates the production PostgreSQL schema. Local development uses
+SQLite when `DATABASE_URL` is absent; production automatically uses Neon when
+`DATABASE_URL` is configured.
 
 ### Cloudflare OTP email
 
@@ -130,6 +130,13 @@ signatures. Teacher playback links expire after 15 minutes.
 NODE_ENV=production
 OTP_SECRET=replace-with-a-long-random-secret
 DATABASE_URL=postgresql://...
+ADMIN_NAME=MUSIC SCHOOL Admin
+ADMIN_EMAIL=admin@your-domain.com
+ADMIN_PASSWORD=replace-with-a-strong-admin-password
+TEACHER_NAME=Primary Music Teacher
+TEACHER_EMAIL=teacher@your-domain.com
+TEACHER_PASSWORD=replace-with-a-strong-teacher-password
+TEACHER_INSTRUMENT=Guitar
 CLOUDFLARE_EMAIL_WORKER_URL=https://ots-otp-email...workers.dev
 CLOUDFLARE_EMAIL_WORKER_TOKEN=replace-with-worker-shared-secret
 OTP_FROM_EMAIL=MUSIC SCHOOL OTS <login@your-verified-domain.com>

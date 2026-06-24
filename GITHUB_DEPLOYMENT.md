@@ -56,8 +56,8 @@ Build command: none
 Start command: npm start
 ```
 
-The host must support Node.js 24 or newer and persistent storage, or the SQLite
-database should be migrated to a managed PostgreSQL database.
+The host must support Node.js 24 or newer. When `DATABASE_URL` is present, the
+API uses Neon PostgreSQL and does not require a persistent disk.
 
 ## Required production environment variables
 
@@ -65,6 +65,13 @@ database should be migrated to a managed PostgreSQL database.
 NODE_ENV=production
 OTP_SECRET=replace-with-a-long-random-secret
 DATABASE_URL=postgresql://...
+ADMIN_NAME=MUSIC SCHOOL Admin
+ADMIN_EMAIL=admin@your-domain.com
+ADMIN_PASSWORD=replace-with-a-strong-admin-password
+TEACHER_NAME=Primary Music Teacher
+TEACHER_EMAIL=teacher@your-domain.com
+TEACHER_PASSWORD=replace-with-a-strong-teacher-password
+TEACHER_INSTRUMENT=Guitar
 CLOUDFLARE_EMAIL_WORKER_URL=https://ots-otp-email...workers.dev
 CLOUDFLARE_EMAIL_WORKER_TOKEN=replace-with-worker-shared-secret
 OTP_FROM_EMAIL=MUSIC SCHOOL OTS <login@your-verified-domain.com>

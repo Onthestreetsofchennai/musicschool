@@ -17,12 +17,14 @@ import {
   recalculateStudent,
   verifyPassword
 } from "./backend/database.mjs";
+import { createNeonApi } from "./backend/neon-api.mjs";
 
 const ROOT = resolve(".");
-const PORT = Number(process.env.PORT || 4173);
-const HOST = process.env.HOST || "127.0.0.1";
-const db = createDatabase(join(ROOT, "data", "ots.db"));
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const PORT = Number(process.env.PORT || 4173);
+const HOST = process.env.HOST || (IS_PRODUCTION ? "0.0.0.0" : "127.0.0.1");
+const USE_NEON = Boolean(process.env.DATABASE_URL);
+const db = USE_NEON ? null : createDatabase(join(ROOT, "data", "ots.db"));
 const OTP_SECRET = process.env.OTP_SECRET || "music-school-ots-development-secret";
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || "";
@@ -160,6 +162,22 @@ function createCloudinaryPrivateDownloadUrl(storageKey) {
     api_key: CLOUDINARY_API_KEY
   });
   return `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/video/download?${query}`;
+}
+
+function cloudinaryUploadConfig({ studentId, period }) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const publicId = `music-school-ots/students/${studentId}/${period}-${timestamp}-${randomUUID()}`;
+  const uploadParameters = { public_id: publicId, timestamp, type: "private" };
+  return {
+    uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/video/upload`,
+    cloudName: CLOUDINARY_CLOUD_NAME,
+    apiKey: CLOUDINARY_API_KEY,
+    timestamp,
+    publicId,
+    deliveryType: "private",
+    signature: signCloudinaryParameters(uploadParameters),
+    storageMode: "cloudinary-private"
+  };
 }
 
 function createAuthSession({ principalType, userId = null, studentId = null, role, ttlMilliseconds }) {
@@ -1307,7 +1325,8 @@ const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || `${HOST}:${PORT}`}`);
   try {
     if (url.pathname.startsWith("/api/")) {
-      await handleApi(request, response, url);
+      if (USE_NEON) await neonApi(request, response, url);
+      else await handleApi(request, response, url);
     } else {
       serveStatic(request, response, url);
     }
@@ -1317,6 +1336,23 @@ const server = createServer(async (request, response) => {
     else response.end();
   }
 });
+
+const neonApi = USE_NEON
+  ? await createNeonApi({
+      sendJson,
+      readJson,
+      getToken,
+      deliverOtpEmail,
+      createPracticeUploadReceipt,
+      verifyPracticeUploadReceipt,
+      cloudinaryIsConfigured,
+      createCloudinaryPrivateDownloadUrl,
+      cloudinaryUploadConfig,
+      minPracticeSeconds: MIN_PRACTICE_SECONDS,
+      maxPracticeVideoBytes: MAX_PRACTICE_VIDEO_BYTES,
+      otpSecret: OTP_SECRET
+    })
+  : null;
 
 server.listen(PORT, HOST, () => {
   console.log(`MUSIC SCHOOL OTS running at http://${HOST}:${PORT}`);

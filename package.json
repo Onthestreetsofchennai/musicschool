@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check backend/database.mjs && node --check app.js && node --check admin.js && node --check service-worker.js",
+    "check": "node --check server.mjs && node --check backend/database.mjs && node --check backend/neon-api.mjs && node --check app.js && node --check admin.js && node --check service-worker.js",
     "neon:migrate": "node scripts/migrate-neon.mjs"
   },
   "dependencies": {
