@@ -52,6 +52,20 @@
     </div>
   </div>
 
+  <div class="practice-gate" id="practice-gate" hidden>
+    <section class="practice-gate-card">
+      <span class="practice-gate-icon">7</span>
+      <p class="eyebrow">DAILY PRACTICE REQUIRED</p>
+      <h1 id="practice-gate-title">Upload your morning practice</h1>
+      <p id="practice-gate-message">Your course stays locked until today's required 7-minute practice is submitted.</p>
+      <div class="practice-gate-actions">
+        <button class="button button-primary button-large" id="practice-gate-upload">Upload practice now</button>
+        <button class="button button-secondary" id="practice-gate-snooze">Snooze reminder for 10 minutes</button>
+      </div>
+      <small>Snoozing hides this reminder, but Course, Feedback, Profile and Classroom remain locked.</small>
+    </section>
+  </div>
+
   <div class="app-shell" id="app-shell" inert aria-hidden="true">
     <aside class="sidebar">
       <div class="brand-lockup sidebar-brand">
@@ -172,7 +186,7 @@
                     <h3>Chord shapes and timing</h3>
                     <p>6:00 PM - 6:45 PM with <span data-teacher-display-name>Your teacher</span></p>
                   </div>
-                  <button class="button button-secondary join-session">Join</button>
+                  <button class="button button-secondary join-session" data-room="ots-weekly-session-1">Join classroom</button>
                 </article>
                 <article class="session-card">
                   <div class="session-date">
@@ -184,7 +198,7 @@
                     <h3>Strumming and weekly review</h3>
                     <p>6:00 PM - 6:45 PM with <span data-teacher-display-name>Your teacher</span></p>
                   </div>
-                  <button class="button button-secondary join-session">Join</button>
+                  <button class="button button-secondary join-session" data-room="ots-weekly-session-2">Join classroom</button>
                 </article>
               </div>
             </section>
@@ -204,7 +218,7 @@
                     <strong>Morning practice</strong>
                     <small id="home-morning-status">Reviewed by your teacher</small>
                   </span>
-                  <span class="daily-time">10 min</span>
+                  <span class="daily-time">7 min</span>
                 </button>
                 <button class="daily-item" data-view="checkin" id="home-evening-item">
                   <span class="check-icon">2</span>
@@ -212,7 +226,7 @@
                     <strong>Evening practice</strong>
                     <small id="home-evening-status">Due by 8:00 PM</small>
                   </span>
-                  <span class="daily-time">10 min</span>
+                  <span class="daily-time">7 min</span>
                 </button>
               </div>
             </section>
@@ -268,8 +282,8 @@
           <div class="page-intro">
             <div>
               <p class="eyebrow">DAILY ACCOUNTABILITY</p>
-              <h1>Two videos. Twenty focused minutes.</h1>
-              <p>Upload one 10-minute practice video in the morning and one in the evening. Your teacher reviews both.</p>
+              <h1>Two videos. Fourteen focused minutes.</h1>
+              <p>Upload one practice video of at least 7 minutes in the morning and one in the evening. Your teacher reviews both.</p>
             </div>
             <div class="streak-pill">
               <span class="status-dot"></span>
@@ -290,7 +304,7 @@
               <div class="upload-heading">
                 <div>
                   <p class="eyebrow">MORNING</p>
-                  <h2>10-minute practice</h2>
+                  <h2>Minimum 7-minute practice</h2>
                 </div>
                 <span class="upload-status is-reviewed" id="morning-status-badge">Reviewed</span>
               </div>
@@ -310,7 +324,7 @@
               <div class="upload-heading">
                 <div>
                   <p class="eyebrow">EVENING</p>
-                  <h2>10-minute practice</h2>
+                  <h2>Minimum 7-minute practice</h2>
                 </div>
                 <span class="upload-status" id="evening-status-badge">Due today</span>
               </div>
@@ -355,7 +369,10 @@
               <h3 id="scheduled-call-title">Wednesday at 7:00 PM</h3>
               <p><span data-teacher-first-name>Your teacher</span> will meet you for a focused correction call.</p>
             </div>
-            <button class="text-button" id="cancel-help-call">Cancel</button>
+            <div class="help-call-actions">
+              <button class="button button-primary" id="join-help-classroom">Join classroom</button>
+              <button class="text-button" id="cancel-help-call">Cancel</button>
+            </div>
           </div>
 
           <div class="feedback-list" id="feedback-list"></div>
@@ -478,6 +495,33 @@
       </label>
       <button class="button button-primary button-large" id="confirm-help-call" value="default">Confirm help call</button>
     </form>
+  </dialog>
+
+  <dialog class="classroom-modal" id="classroom-modal">
+    <div class="classroom-shell">
+      <header class="classroom-header">
+        <div>
+          <p class="eyebrow">OTS CLASSROOM</p>
+          <h2>Live lesson with <span data-teacher-display-name>Your teacher</span></h2>
+        </div>
+        <button class="modal-close classroom-close" id="close-classroom" type="button" aria-label="Leave classroom">X</button>
+      </header>
+      <div class="classroom-stage">
+        <video id="classroom-preview" autoplay muted playsinline></video>
+        <div class="classroom-empty" id="classroom-empty">
+          <span data-teacher-initials>OT</span>
+          <strong>Camera preview</strong>
+          <small>Allow camera and microphone to prepare for class.</small>
+        </div>
+      </div>
+      <div class="classroom-controls">
+        <button class="button button-secondary" id="toggle-classroom-mic" type="button">Mute microphone</button>
+        <button class="button button-secondary" id="toggle-classroom-camera" type="button">Turn camera off</button>
+        <a class="button button-primary" id="open-live-room" href="#" target="classroom-room">Enter live room</a>
+      </div>
+      <p class="classroom-note">The live room opens inside this app. Camera preview stays local until you enter the room.</p>
+      <iframe id="classroom-frame" name="classroom-room" title="OTS live classroom" allow="camera; microphone; fullscreen; display-capture" hidden></iframe>
+    </div>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

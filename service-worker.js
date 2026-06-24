@@ -1,4 +1,4 @@
-const CACHE_NAME = "music-school-ots-v5";
+const CACHE_NAME = "music-school-ots-v6";
 const APP_ASSETS = [
   "./",
   "./index.html",

@@ -81,6 +81,69 @@ button {
   min-height: 100vh;
 }
 
+.practice-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(17, 20, 38, 0.86);
+  backdrop-filter: blur(12px);
+}
+
+.practice-gate-card {
+  width: min(520px, 100%);
+  padding: clamp(28px, 6vw, 48px);
+  border-radius: var(--radius-xl);
+  background: white;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.32);
+  text-align: center;
+}
+
+.practice-gate-icon {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 22px;
+  place-items: center;
+  border-radius: 24px;
+  background: var(--purple);
+  color: white;
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.practice-gate-card h1 {
+  margin: 9px 0 12px;
+  font-size: clamp(2rem, 7vw, 3.4rem);
+  line-height: 1;
+}
+
+.practice-gate-card > p:not(.eyebrow) {
+  margin: 0 auto 22px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.practice-gate-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.practice-gate-card small {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.app-shell.is-practice-locked [data-view]:not([data-view="checkin"]),
+.app-shell.is-practice-locked .join-session,
+.app-shell.is-practice-locked .open-help-call {
+  opacity: 0.48;
+}
+
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
@@ -1093,6 +1156,12 @@ p {
   color: var(--muted);
 }
 
+.help-call-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .feedback-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1474,6 +1543,105 @@ textarea:focus {
   margin-top: 18px;
 }
 
+.classroom-modal {
+  width: min(1080px, calc(100% - 24px));
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 26px;
+  background: transparent;
+}
+
+.classroom-modal::backdrop {
+  background: rgba(8, 10, 21, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.classroom-shell {
+  padding: 24px;
+  border-radius: 26px;
+  background: #0d1020;
+  color: white;
+}
+
+.classroom-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.classroom-header h2 {
+  margin: 6px 0 0;
+}
+
+.classroom-close {
+  position: static;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.classroom-stage {
+  position: relative;
+  display: grid;
+  min-height: 430px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #171b31;
+}
+
+.classroom-stage video,
+.classroom-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 430px;
+  border: 0;
+  object-fit: cover;
+}
+
+.classroom-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.classroom-empty > span {
+  display: grid;
+  width: 88px;
+  height: 88px;
+  place-items: center;
+  border-radius: 28px;
+  background: var(--purple);
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.classroom-empty small,
+.classroom-note {
+  color: #aeb3c7;
+}
+
+.classroom-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.classroom-note {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 0.76rem;
+}
+
 .toast {
   position: fixed;
   right: 24px;
@@ -1538,6 +1706,16 @@ textarea:focus {
 
   main {
     padding: 22px 16px 105px;
+  }
+
+  .classroom-shell {
+    padding: 16px;
+  }
+
+  .classroom-stage,
+  .classroom-stage video,
+  .classroom-frame {
+    min-height: 52vh;
   }
 
   .bottom-nav {

@@ -30,7 +30,8 @@ sessions.
 ## 3. Daily workflow
 
 1. Student signs in with registered email and six-digit OTP.
-2. Student records a morning or evening 10-minute practice video.
+2. Student records a morning or evening practice video of at least seven
+   minutes.
 3. A submission record enters the assigned teacher's review queue.
 4. The teacher provides one positive observation, one correction and one next
    practice focus.
@@ -122,13 +123,13 @@ Student / Parent App
 API, OTP email and authentication
         |
         +--> PostgreSQL: users, student accounts, OTP sessions and analysis
-        +--> Private object storage: practice videos
+        +--> Cloudinary: private practice videos
         +--> Queue workers: video processing and notifications
         +--> Meeting provider: live sessions and help calls
         +--> Admin portal: teachers, academic heads and operations
 ```
 
-The SQLite implementation is suitable for product review and local
-development. Before a public launch, move the schema to PostgreSQL, use signed
-video upload URLs, configure the OTP email provider and keep session secrets in
-the hosting environment.
+SQLite remains the local development database. `neon/schema.sql` defines the
+production PostgreSQL schema. Cloudflare Workers provide OTP delivery, while
+the Node API signs private Cloudinary uploads and expiring playback links.
+Production secrets stay in the hosting and Worker environments.

@@ -355,12 +355,32 @@ async function loadReviews() {
     : '<div class="empty-state">The review queue is clear.</div>';
 }
 
-function openReview(button) {
+async function openReview(button) {
   document.querySelector("#review-submission-id").value = button.dataset.submissionId;
   document.querySelector("#review-modal-title").textContent = `${button.dataset.studentName}'s ${button.dataset.period} practice`;
   document.querySelector("#review-modal-subtitle").textContent = `Week ${button.dataset.week} submission`;
   document.querySelector("#review-file-name").textContent = button.dataset.fileName;
+  const player = document.querySelector("#review-video-player");
+  const icon = document.querySelector(".review-video-placeholder > span");
+  const message = document.querySelector("#review-video-message");
+  player.hidden = true;
+  player.removeAttribute("src");
+  icon.hidden = false;
+  message.textContent = "Loading private practice video...";
   document.querySelector("#review-modal").showModal();
+  try {
+    const access = await api(`/api/reviews/${button.dataset.submissionId}/video-access`);
+    if (access.playbackUrl) {
+      player.src = access.playbackUrl;
+      player.hidden = false;
+      icon.hidden = true;
+      message.textContent = "Private video access expires in 15 minutes.";
+    } else {
+      message.textContent = "Cloudinary video storage is not configured in this local environment.";
+    }
+  } catch (error) {
+    message.textContent = error.message;
+  }
 }
 
 async function submitReview(event) {
@@ -471,7 +491,7 @@ function bindEvents() {
     if (studentButton) await openStudent(Number(studentButton.dataset.studentId));
 
     const reviewButton = event.target.closest(".open-review");
-    if (reviewButton) openReview(reviewButton);
+    if (reviewButton) await openReview(reviewButton);
 
     const resolveButton = event.target.closest(".resolve-alert");
     if (resolveButton) await resolveAlert(Number(resolveButton.dataset.alertId));

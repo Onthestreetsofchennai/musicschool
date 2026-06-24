@@ -24,9 +24,14 @@ const HOST = process.env.HOST || "127.0.0.1";
 const db = createDatabase(join(ROOT, "data", "ots.db"));
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const OTP_SECRET = process.env.OTP_SECRET || "music-school-ots-development-secret";
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || "";
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || "";
 const OTP_EXPIRY_MINUTES = 10;
 const STUDENT_SESSION_DAYS = 14;
 const STAFF_SESSION_HOURS = 12;
+const MIN_PRACTICE_SECONDS = Number(process.env.MIN_PRACTICE_SECONDS || 420);
+const MAX_PRACTICE_VIDEO_BYTES = Number(process.env.MAX_PRACTICE_VIDEO_BYTES || 100_000_000);
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -89,6 +94,72 @@ function isValidEmail(value) {
 
 function hashToken(token) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function createPracticeUploadReceipt({ studentId, period, publicId }) {
+  const payload = Buffer.from(JSON.stringify({
+    action: "upload",
+    studentId,
+    period,
+    publicId,
+    expiresAt: Date.now() + 10 * 60 * 1000
+  })).toString("base64url");
+  const signature = createHmac("sha256", OTP_SECRET).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifyPracticeUploadReceipt(receipt, { studentId, period, storageKey }) {
+  const [payload, signature] = String(receipt || "").split(".");
+  if (!payload || !signature) return false;
+  const expected = createHmac("sha256", OTP_SECRET).update(payload).digest("base64url");
+  const providedBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (providedBuffer.length !== expectedBuffer.length || !timingSafeEqual(providedBuffer, expectedBuffer)) return false;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return data.action === "upload" &&
+      Number(data.studentId) === Number(studentId) &&
+      data.period === period &&
+      Date.now() <= Number(data.expiresAt) &&
+      String(storageKey).startsWith(`${data.publicId}.`);
+  } catch {
+    return false;
+  }
+}
+
+function signCloudinaryParameters(parameters) {
+  const serialized = Object.entries(parameters)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+  return createHash("sha1").update(`${serialized}${CLOUDINARY_API_SECRET}`).digest("hex");
+}
+
+function cloudinaryIsConfigured() {
+  return Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET);
+}
+
+function createCloudinaryPrivateDownloadUrl(storageKey) {
+  const separator = storageKey.lastIndexOf(".");
+  if (separator <= 0 || separator === storageKey.length - 1) return null;
+  const publicId = storageKey.slice(0, separator);
+  const format = storageKey.slice(separator + 1);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const expiresAt = timestamp + 15 * 60;
+  const parameters = {
+    expires_at: expiresAt,
+    format,
+    public_id: publicId,
+    timestamp,
+    type: "private"
+  };
+  const query = new URLSearchParams({
+    ...Object.fromEntries(Object.entries(parameters).map(([key, value]) => [key, String(value)])),
+    signature: signCloudinaryParameters(parameters),
+    api_key: CLOUDINARY_API_KEY
+  });
+  return `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/video/download?${query}`;
 }
 
 function createAuthSession({ principalType, userId = null, studentId = null, role, ttlMilliseconds }) {
@@ -191,37 +262,42 @@ function escapeHtml(value) {
 }
 
 async function deliverOtpEmail({ email, studentName, code, challengeId }) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const cloudflareWorkerUrl = process.env.CLOUDFLARE_EMAIL_WORKER_URL;
+  const cloudflareWorkerToken = process.env.CLOUDFLARE_EMAIL_WORKER_TOKEN;
   const from = process.env.OTP_FROM_EMAIL;
-  if (apiKey && from) {
-    const response = await fetch("https://api.resend.com/emails", {
+  const subject = `${code} is your MUSIC SCHOOL OTS login code`;
+  const text = `Hello ${studentName}, your MUSIC SCHOOL OTS login code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`;
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;color:#111426">
+      <div style="font-weight:800;margin-bottom:24px">MUSIC SCHOOL OTS</div>
+      <h1 style="font-size:26px">Your login code</h1>
+      <p>Hello ${escapeHtml(studentName)}, use this one-time code to sign in:</p>
+      <div style="font-size:38px;font-weight:900;letter-spacing:8px;padding:20px 0;color:#7057ff">${code}</div>
+      <p>This code expires in ${OTP_EXPIRY_MINUTES} minutes. Do not share it with anyone.</p>
+    </div>
+  `;
+
+  if (cloudflareWorkerUrl && cloudflareWorkerToken && from) {
+    const response = await fetch(cloudflareWorkerUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${cloudflareWorkerToken}`,
         "Content-Type": "application/json",
         "Idempotency-Key": `ots-otp-${challengeId}`
       },
       body: JSON.stringify({
         from,
-        to: [email],
-        subject: `${code} is your MUSIC SCHOOL OTS login code`,
-        text: `Hello ${studentName}, your MUSIC SCHOOL OTS login code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;color:#111426">
-            <div style="font-weight:800;margin-bottom:24px">MUSIC SCHOOL OTS</div>
-            <h1 style="font-size:26px">Your login code</h1>
-            <p>Hello ${escapeHtml(studentName)}, use this one-time code to sign in:</p>
-            <div style="font-size:38px;font-weight:900;letter-spacing:8px;padding:20px 0;color:#7057ff">${code}</div>
-            <p>This code expires in ${OTP_EXPIRY_MINUTES} minutes. Do not share it with anyone.</p>
-          </div>
-        `
+        to: email,
+        subject,
+        text,
+        html
       })
     });
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Email delivery failed: ${detail.slice(0, 240)}`);
+      throw new Error(`Cloudflare OTP email delivery failed: ${detail.slice(0, 240)}`);
     }
-    return { mode: "email" };
+    return { mode: "cloudflare" };
   }
 
   if (IS_PRODUCTION) {
@@ -229,6 +305,39 @@ async function deliverOtpEmail({ email, studentName, code, challengeId }) {
   }
   console.log(`[DEV OTP] ${email}: ${code}`);
   return { mode: "development", developmentOtp: code };
+}
+
+function todayPracticeSubmissions(studentId) {
+  return db.prepare(`
+    SELECT period, review_status, file_name, uploaded_at, duration_seconds
+    FROM practice_submissions
+    WHERE student_id = ?
+      AND date(uploaded_at, '+5 hours', '+30 minutes') = date('now', '+5 hours', '+30 minutes')
+    ORDER BY uploaded_at DESC
+  `).all(studentId);
+}
+
+function getPracticeGate(studentId, submissions = todayPracticeSubmissions(studentId)) {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const duePeriods = currentHour >= 17 ? ["morning", "evening"] : ["morning"];
+  const submittedPeriods = new Set(
+    submissions
+      .filter((submission) => Number(submission.duration_seconds || 0) >= MIN_PRACTICE_SECONDS)
+      .map((submission) => submission.period)
+  );
+  const missingPeriods = duePeriods.filter((period) => !submittedPeriods.has(period));
+  const activePeriod = missingPeriods[0] || null;
+  return {
+    locked: Boolean(activePeriod),
+    activePeriod,
+    missingPeriods,
+    duePeriods,
+    minDurationSeconds: MIN_PRACTICE_SECONDS,
+    message: activePeriod
+      ? `${activePeriod === "morning" ? "Morning" : "Evening"} practice is required before using the app. Upload at least ${Math.round(MIN_PRACTICE_SECONDS / 60)} minutes.`
+      : "Practice gate is clear for now."
+  };
 }
 
 function statusRank(status) {
@@ -481,7 +590,7 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, {
       status: "ok",
       database: "sqlite",
-      emailDelivery: process.env.RESEND_API_KEY && process.env.OTP_FROM_EMAIL ? "resend" : "development",
+      emailDelivery: process.env.CLOUDFLARE_EMAIL_WORKER_URL && process.env.OTP_FROM_EMAIL ? "cloudflare" : "development",
       time: new Date().toISOString()
     });
   }
@@ -539,7 +648,7 @@ async function handleApi(request, response, url) {
       db.prepare("UPDATE otp_challenges SET delivery_status = 'sent' WHERE id = ?").run(challengeId);
       return sendJson(response, 200, {
         ok: true,
-        message: delivery.mode === "email" ? "Login code sent to your email." : "Development login code generated.",
+        message: delivery.mode === "cloudflare" ? "Login code sent to your email." : "Development login code generated.",
         expiresInSeconds: OTP_EXPIRY_MINUTES * 60,
         developmentOtp: delivery.developmentOtp
       });
@@ -852,6 +961,28 @@ async function handleApi(request, response, url) {
     return sendJson(response, 201, { ok: true, student: getStudentAnalysis(db, submission.student_id) });
   }
 
+  const reviewVideoMatch = pathname.match(/^\/api\/reviews\/(\d+)\/video-access$/);
+  if (reviewVideoMatch && request.method === "GET") {
+    const session = requireAuth(request, response, ["super_admin", "academic_head", "teacher"]);
+    if (!session) return;
+    const submission = db.prepare("SELECT * FROM practice_submissions WHERE id = ?").get(Number(reviewVideoMatch[1]));
+    if (!submission) return sendJson(response, 404, { error: "Submission not found" });
+    const scopedTeacherId = getTeacherScope(session);
+    if (scopedTeacherId !== null && submission.teacher_id !== scopedTeacherId) {
+      return sendJson(response, 403, { error: "Submission is outside your assigned review queue" });
+    }
+    if (!cloudinaryIsConfigured() || !IS_PRODUCTION) {
+      return sendJson(response, 200, { playbackUrl: null, storageMode: "metadata-only" });
+    }
+    const playbackUrl = createCloudinaryPrivateDownloadUrl(submission.storage_key);
+    if (!playbackUrl) return sendJson(response, 422, { error: "The stored video reference is invalid" });
+    return sendJson(response, 200, {
+      playbackUrl,
+      storageMode: "cloudinary-private",
+      expiresInSeconds: 900
+    });
+  }
+
   if (pathname === "/api/alerts" && request.method === "GET") {
     const session = requireAuth(request, response, ["super_admin", "academic_head", "teacher", "operations"]);
     if (!session) return;
@@ -934,12 +1065,8 @@ async function handleApi(request, response, url) {
     if (!session) return;
     const analysis = getStudentAnalysis(db, session.studentId);
     if (!analysis) return sendJson(response, 404, { error: "Student not found" });
-    const todaySubmissions = db.prepare(`
-      SELECT period, review_status, file_name, uploaded_at
-      FROM practice_submissions
-      WHERE student_id = ? AND date(uploaded_at) = date('now')
-      ORDER BY uploaded_at DESC
-    `).all(session.studentId);
+    const todaySubmissions = todayPracticeSubmissions(session.studentId);
+    const practiceGate = getPracticeGate(session.studentId, todaySubmissions);
     const preferences = db.prepare(`
       SELECT morning_reminder, evening_reminder, parent_updates
       FROM student_preferences
@@ -956,13 +1083,63 @@ async function handleApi(request, response, url) {
         eveningReminder: Boolean(preferences.evening_reminder),
         parentUpdates: Boolean(preferences.parent_updates)
       },
+      practiceGate,
       latestSkills: analysis.latestSkills,
       todaySubmissions,
       feedback: analysis.submissions.filter((submission) => submission.review_status === "reviewed").slice(0, 5),
       upcomingSessions: analysis.sessions
         .filter((session) => session.status === "scheduled" && new Date(session.scheduled_at) >= new Date())
+        .sort((left, right) => new Date(left.scheduled_at) - new Date(right.scheduled_at))
         .slice(0, 4),
+      recentSubmissions: analysis.submissions.slice(0, 14),
       helpCalls: analysis.helpCalls.filter((call) => call.status === "scheduled")
+    });
+  }
+
+  if (pathname === "/api/student/me/video-upload-config" && request.method === "POST") {
+    const session = requireStudentAuth(request, response);
+    if (!session) return;
+    const body = await readJson(request);
+    const period = String(body.period || "");
+    const contentType = String(body.contentType || "");
+    if (!["morning", "evening"].includes(period)) {
+      return sendJson(response, 400, { error: "Invalid practice period" });
+    }
+    if (!contentType.startsWith("video/")) {
+      return sendJson(response, 400, { error: "Only video uploads are allowed" });
+    }
+    const fileSize = Math.round(Number(body.fileSize) || 0);
+    if (fileSize <= 0 || fileSize > MAX_PRACTICE_VIDEO_BYTES) {
+      return sendJson(response, 400, { error: "Practice videos must be 100 MB or smaller for the MVP." });
+    }
+    if (!cloudinaryIsConfigured() && IS_PRODUCTION) {
+      return sendJson(response, 503, { error: "Cloud video storage is not configured" });
+    }
+    if (!cloudinaryIsConfigured()) {
+      return sendJson(response, 200, {
+        uploadUrl: null,
+        storageMode: "metadata-only",
+        maxFileBytes: MAX_PRACTICE_VIDEO_BYTES
+      });
+    }
+    const timestamp = Math.floor(Date.now() / 1000);
+    const publicId = `music-school-ots/students/${session.studentId}/${period}-${timestamp}-${randomUUID()}`;
+    const uploadParameters = {
+      public_id: publicId,
+      timestamp,
+      type: "private"
+    };
+    return sendJson(response, 200, {
+      uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/video/upload`,
+      cloudName: CLOUDINARY_CLOUD_NAME,
+      apiKey: CLOUDINARY_API_KEY,
+      timestamp,
+      publicId,
+      deliveryType: "private",
+      signature: signCloudinaryParameters(uploadParameters),
+      uploadReceipt: createPracticeUploadReceipt({ studentId: session.studentId, period, publicId }),
+      storageMode: "cloudinary-private",
+      maxFileBytes: MAX_PRACTICE_VIDEO_BYTES
     });
   }
 
@@ -974,15 +1151,29 @@ async function handleApi(request, response, url) {
     if (!student) return sendJson(response, 404, { error: "Student not found" });
     const body = await readJson(request);
     if (!["morning", "evening"].includes(body.period)) return sendJson(response, 400, { error: "Invalid practice period" });
+    const durationSeconds = Math.round(Number(body.durationSeconds) || 0);
+    if (durationSeconds < MIN_PRACTICE_SECONDS) {
+      return sendJson(response, 400, { error: `Practice video must be at least ${Math.round(MIN_PRACTICE_SECONDS / 60)} minutes.` });
+    }
     const existingSubmission = db.prepare(`
       SELECT id
       FROM practice_submissions
-      WHERE student_id = ? AND period = ? AND date(uploaded_at) = date('now')
+      WHERE student_id = ? AND period = ?
+        AND date(uploaded_at, '+5 hours', '+30 minutes') = date('now', '+5 hours', '+30 minutes')
     `).get(studentId, body.period);
     if (existingSubmission) return sendJson(response, 409, { error: `${body.period} practice was already submitted today` });
     const uploadedAt = new Date().toISOString();
     const fileName = String(body.fileName || `${body.period}-practice.mp4`);
-    const storageKey = `students/${studentId}/week-${student.current_week}/${randomUUID()}-${fileName.replaceAll(/[^a-zA-Z0-9._-]/g, "-")}`;
+    const storageKey = String(body.storageKey || "") ||
+      `students/${studentId}/week-${student.current_week}/${randomUUID()}-${fileName.replaceAll(/[^a-zA-Z0-9._-]/g, "-")}`;
+    if (IS_PRODUCTION && (!String(body.storageKey || "") ||
+      !verifyPracticeUploadReceipt(body.uploadReceipt, {
+        studentId,
+        period: body.period,
+        storageKey
+      }))) {
+      return sendJson(response, 400, { error: "The practice video must finish uploading before submission" });
+    }
     const result = db.prepare(`
       INSERT INTO practice_submissions (
         student_id, teacher_id, course_week, period, duration_seconds,
@@ -993,7 +1184,7 @@ async function handleApi(request, response, url) {
       student.assigned_teacher_id,
       student.current_week,
       body.period,
-      Number(body.durationSeconds) || 600,
+      durationSeconds,
       fileName,
       storageKey,
       uploadedAt

@@ -472,7 +472,7 @@ function seedPracticeAndReviews(db, students) {
     const [studentId, name, , , , teacherId, currentWeek] = student;
     const target = submissionTargets[studentId];
     for (let index = 0; index < target; index += 1) {
-      const dayOffset = -Math.floor(index / 2);
+      const dayOffset = -1 - Math.floor(index / 2);
       const period = index % 2 === 0 ? "morning" : "evening";
       const uploadedAt = dateAtOffset(dayOffset, period === "morning" ? 7 : 19, 15);
       const shouldRemainPending =

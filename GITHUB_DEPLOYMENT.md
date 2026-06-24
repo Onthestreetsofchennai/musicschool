@@ -14,6 +14,10 @@
 - `server.mjs`
 - `package.json`
 - `.env.example`
+- `neon/schema.sql`
+- `scripts/migrate-neon.mjs`
+- `cloudflare/email-worker/`
+- `cloudflare/video-worker/`
 - `README.md`
 - `BACKEND_STRUCTURE.md`
 - `.gitignore`
@@ -60,9 +64,17 @@ database should be migrated to a managed PostgreSQL database.
 ```text
 NODE_ENV=production
 OTP_SECRET=replace-with-a-long-random-secret
-RESEND_API_KEY=re_xxxxxxxxx
+DATABASE_URL=postgresql://...
+CLOUDFLARE_EMAIL_WORKER_URL=https://ots-otp-email...workers.dev
+CLOUDFLARE_EMAIL_WORKER_TOKEN=replace-with-worker-shared-secret
 OTP_FROM_EMAIL=MUSIC SCHOOL OTS <login@your-verified-domain.com>
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+MIN_PRACTICE_SECONDS=420
+MAX_PRACTICE_VIDEO_BYTES=100000000
 ```
 
-For local development without Resend, OTP codes appear on the student login
-screen so the flow can be tested without sending real email.
+For local development without Cloudflare email and Cloudinary credentials, OTP
+codes appear on the student login screen and video metadata is stored without
+uploading the binary.

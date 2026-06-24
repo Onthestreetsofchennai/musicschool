@@ -106,6 +106,15 @@ const defaultState = {
     eveningReminder: true,
     parentUpdates: true
   },
+  practiceGate: {
+    locked: false,
+    activePeriod: null,
+    missingPeriods: [],
+    minDurationSeconds: 420,
+    message: ""
+  },
+  upcomingSessions: [],
+  recentSubmissions: [],
   helpCall: null
 };
 
@@ -146,8 +155,12 @@ let pendingLoginEmail = "";
 let selectedHelpSlot = null;
 let toastTimer;
 const temporaryVideoUrls = {};
+const selectedPracticeFiles = {};
 let backendFeedback = null;
 let backendConnected = false;
+let classroomStream = null;
+let classroomMicEnabled = true;
+let classroomCameraEnabled = true;
 
 async function apiRequest(path, options = {}) {
   const headers = {
@@ -225,6 +238,9 @@ async function syncStudentFromBackend() {
       eveningReminder: data.preferences.eveningReminder,
       parentUpdates: data.preferences.parentUpdates
     };
+    state.practiceGate = data.practiceGate || structuredClone(defaultState.practiceGate);
+    state.upcomingSessions = data.upcomingSessions || [];
+    state.recentSubmissions = data.recentSubmissions || [];
     state.checkins = {
       morning: { status: "pending", fileName: "", time: "" },
       evening: { status: "pending", fileName: "", time: "" }
@@ -258,6 +274,7 @@ async function syncStudentFromBackend() {
 
     saveState();
     renderAll();
+    if (state.practiceGate.locked) navigate("checkin", true);
     setAuthVisible(false);
   } catch (error) {
     backendConnected = false;
@@ -299,7 +316,12 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
 }
 
-function navigate(viewName) {
+function navigate(viewName, bypassGate = false) {
+  if (!bypassGate && state.practiceGate.locked && viewName !== "checkin") {
+    renderPracticeGate(true);
+    showToast(state.practiceGate.message);
+    return;
+  }
   document.querySelectorAll(".view").forEach((view) => {
     view.classList.toggle("is-active", view.id === `view-${viewName}`);
   });
@@ -311,6 +333,22 @@ function navigate(viewName) {
   const activeView = document.querySelector(`#view-${viewName}`);
   document.querySelector("#topbar-title").textContent = activeView?.dataset.title || "MUSIC SCHOOL OTS";
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderPracticeGate(forceVisible = false) {
+  const gate = document.querySelector("#practice-gate");
+  const appShell = document.querySelector("#app-shell");
+  const snoozedUntil = Number(sessionStorage.getItem("otsPracticeGateSnoozedUntil") || 0);
+  const snoozed = snoozedUntil > Date.now();
+  const visible = state.practiceGate.locked && (forceVisible || !snoozed);
+  gate.hidden = !visible;
+  appShell.classList.toggle("is-practice-locked", state.practiceGate.locked);
+  if (!state.practiceGate.locked) sessionStorage.removeItem("otsPracticeGateSnoozedUntil");
+
+  const periodLabel = state.practiceGate.activePeriod === "evening" ? "evening" : "morning";
+  document.querySelector("#practice-gate-title").textContent = `Upload your ${periodLabel} practice`;
+  document.querySelector("#practice-gate-message").textContent = state.practiceGate.message ||
+    `Upload at least ${Math.round(state.practiceGate.minDurationSeconds / 60)} minutes to unlock the app.`;
 }
 
 function calculateProgress() {
@@ -368,6 +406,27 @@ function renderHome() {
 
   const eveningItem = document.querySelector("#home-evening-item");
   eveningItem.classList.toggle("is-complete", eveningSubmitted);
+  const sessionList = document.querySelector(".session-list");
+  const teacher = teacherIdentity();
+  sessionList.innerHTML = state.upcomingSessions.length
+    ? state.upcomingSessions.slice(0, 2).map((session, index) => {
+      const date = new Date(session.scheduled_at);
+      return `
+        <article class="session-card">
+          <div class="session-date">
+            <strong>${new Intl.DateTimeFormat("en-IN", { weekday: "short" }).format(date).toUpperCase()}</strong>
+            <span>${date.getDate()}</span>
+          </div>
+          <div class="session-copy">
+            <span class="tag ${index === 0 ? "tag-purple" : "tag-yellow"}">Session ${session.session_number}</span>
+            <h3>${session.topic}</h3>
+            <p>${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(date)} with ${teacher.displayName}</p>
+          </div>
+          <button class="button button-secondary join-session" data-room="session-${session.id}">Join classroom</button>
+        </article>
+      `;
+    }).join("")
+    : '<p class="empty-state">No upcoming live sessions.</p>';
   eveningItem.querySelector(".check-icon").textContent = eveningSubmitted ? "✓" : "2";
 }
 
@@ -451,24 +510,19 @@ function renderCheckins() {
 }
 
 function renderHistory() {
-  const rows = [
-    ["Today", "Morning submitted", "Reviewed"],
-    ["Yesterday", "Morning + evening", "Reviewed"],
-    ["Saturday", "Morning + evening", "Reviewed"],
-    ["Friday", "Morning + evening", "Reviewed"]
-  ];
+  const rows = state.recentSubmissions.map((submission) => ({
+    day: new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short" }).format(new Date(submission.uploaded_at)),
+    detail: `${submission.period === "morning" ? "Morning" : "Evening"} · ${Math.round(submission.duration_seconds / 60)} min`,
+    status: submission.review_status === "reviewed" ? "Reviewed" : "Waiting review"
+  }));
 
-  if (["submitted", "reviewed"].includes(state.checkins.evening.status)) {
-    rows[0] = ["Today", "Morning + evening", "Waiting review"];
-  }
-
-  document.querySelector("#history-list").innerHTML = rows.map(([day, detail, status]) => `
+  document.querySelector("#history-list").innerHTML = rows.length ? rows.map(({ day, detail, status }) => `
     <div class="history-row">
       <strong>${day}</strong>
       <span>${detail}</span>
       <span class="tag ${status === "Reviewed" ? "tag-green" : "tag-purple"}">${status}</span>
     </div>
-  `).join("");
+  `).join("") : '<p class="empty-state">No practice uploads yet.</p>';
 }
 
 function renderFeedback() {
@@ -523,6 +577,7 @@ function renderAll() {
   renderCheckins();
   renderFeedback();
   renderProfile();
+  renderPracticeGate();
 }
 
 function openHelpCallModal() {
@@ -559,7 +614,17 @@ function openHelpCallModal() {
   modal.showModal();
 }
 
-function handleUploadSelection(input) {
+function readVideoDuration(file, objectUrl) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => resolve(Math.round(video.duration));
+    video.onerror = () => reject(new Error("The video duration could not be read."));
+    video.src = objectUrl;
+  });
+}
+
+async function handleUploadSelection(input) {
   const period = input.dataset.uploadInput;
   const file = input.files?.[0];
   if (!file) return;
@@ -572,15 +637,37 @@ function handleUploadSelection(input) {
 
   if (temporaryVideoUrls[period]) URL.revokeObjectURL(temporaryVideoUrls[period]);
   temporaryVideoUrls[period] = URL.createObjectURL(file);
+  let durationSeconds;
+  try {
+    durationSeconds = await readVideoDuration(file, temporaryVideoUrls[period]);
+  } catch (error) {
+    showToast(error.message);
+    input.value = "";
+    return;
+  }
+
+  const minimumSeconds = state.practiceGate.minDurationSeconds || 420;
+  if (durationSeconds < minimumSeconds) {
+    showToast(`Choose a video of at least ${Math.round(minimumSeconds / 60)} minutes.`);
+    URL.revokeObjectURL(temporaryVideoUrls[period]);
+    delete temporaryVideoUrls[period];
+    input.value = "";
+    return;
+  }
+  selectedPracticeFiles[period] = file;
 
   state.checkins[period] = {
     status: "selected",
     fileName: file.name,
-    time: ""
+    time: "",
+    durationSeconds
   };
 
   const preview = document.querySelector(`#${period}-preview`);
-  preview.innerHTML = `<video controls playsinline src="${temporaryVideoUrls[period]}"></video>`;
+  preview.innerHTML = `
+    <video controls playsinline src="${temporaryVideoUrls[period]}"></video>
+    <small>${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s selected</small>
+  `;
   preview.classList.remove("is-empty");
   document.querySelector(`[data-submit-upload="${period}"]`).hidden = false;
   renderCheckins();
@@ -590,13 +677,52 @@ async function submitUpload(period) {
   const button = document.querySelector(`[data-submit-upload="${period}"]`);
   button.disabled = true;
   try {
+    let storageKey = "";
+    let uploadReceipt = "";
     if (backendConnected) {
+      const file = selectedPracticeFiles[period];
+      if (file && file.size > 100_000_000) {
+        throw new Error("Choose a video smaller than 100 MB. Record at 720p or lower for the MVP.");
+      }
+      const uploadConfig = await apiRequest("/api/student/me/video-upload-config", {
+        method: "POST",
+        body: JSON.stringify({
+          period,
+          fileName: state.checkins[period].fileName,
+          contentType: file?.type || "video/mp4",
+          fileSize: file?.size || 0
+        })
+      });
+      if (uploadConfig.uploadUrl && file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("api_key", uploadConfig.apiKey);
+        formData.append("timestamp", String(uploadConfig.timestamp));
+        formData.append("public_id", uploadConfig.publicId);
+        formData.append("type", uploadConfig.deliveryType);
+        formData.append("signature", uploadConfig.signature);
+        const uploadResponse = await fetch(uploadConfig.uploadUrl, {
+          method: "POST",
+          body: formData
+        });
+        const uploadResult = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok) {
+          throw new Error(uploadResult.error?.message || uploadResult.error || "Video upload failed.");
+        }
+        storageKey = uploadResult.public_id && uploadResult.format
+          ? `${uploadResult.public_id}.${uploadResult.format}`
+          : "";
+        uploadReceipt = uploadConfig.uploadReceipt || "";
+        if (!storageKey) throw new Error("Cloudinary did not return a valid video reference.");
+      }
       await apiRequest("/api/student/me/practice-submissions", {
         method: "POST",
         body: JSON.stringify({
           period,
           fileName: state.checkins[period].fileName,
-          durationSeconds: 600
+          durationSeconds: state.checkins[period].durationSeconds,
+          storageKey,
+          uploadReceipt
         })
       });
     }
@@ -607,13 +733,53 @@ async function submitUpload(period) {
     if (period === "evening") state.streak = Math.max(state.streak, 7);
     saveState();
     button.hidden = true;
-    renderAll();
+    delete selectedPracticeFiles[period];
+    await syncStudentFromBackend();
     showToast(`${period === "morning" ? "Morning" : "Evening"} video submitted to ${teacherIdentity().firstName} for review.`);
   } catch (error) {
     showToast(error.message);
   } finally {
     button.disabled = false;
   }
+}
+
+async function openClassroom(roomName) {
+  if (state.practiceGate.locked) {
+    renderPracticeGate(true);
+    showToast("Complete the required practice upload before entering the classroom.");
+    return;
+  }
+  const modal = document.querySelector("#classroom-modal");
+  const frame = document.querySelector("#classroom-frame");
+  const liveRoom = document.querySelector("#open-live-room");
+  const safeRoom = `ots-${state.profile.email}-${roomName || "classroom"}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const roomUrl = `https://meet.jit.si/${safeRoom}#config.prejoinPageEnabled=false`;
+  liveRoom.href = roomUrl;
+  frame.hidden = true;
+  frame.src = "about:blank";
+  modal.showModal();
+
+  try {
+    classroomStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    document.querySelector("#classroom-preview").srcObject = classroomStream;
+    document.querySelector("#classroom-empty").hidden = true;
+    classroomMicEnabled = true;
+    classroomCameraEnabled = true;
+  } catch {
+    document.querySelector("#classroom-empty").hidden = false;
+    showToast("Camera preview is unavailable. You can still enter the live room.");
+  }
+}
+
+function closeClassroom() {
+  if (classroomStream) {
+    classroomStream.getTracks().forEach((track) => track.stop());
+    classroomStream = null;
+  }
+  const frame = document.querySelector("#classroom-frame");
+  frame.src = "about:blank";
+  frame.hidden = true;
+  document.querySelector("#classroom-modal").close();
 }
 
 async function completeWeek(weekNumber) {
@@ -730,6 +896,9 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const classroomButton = event.target.closest(".join-session");
+    if (classroomButton) openClassroom(classroomButton.dataset.room);
+
     const weekToggle = event.target.closest("[data-week-toggle]");
     if (weekToggle) {
       const card = document.querySelector(`[data-week-card="${weekToggle.dataset.weekToggle}"]`);
@@ -744,12 +913,51 @@ function bindEvents() {
     if (previewButton) showToast("This week unlocks after the current milestone is completed.");
   });
 
-  document.querySelectorAll(".join-session").forEach((button) => {
-    button.addEventListener("click", () => showToast("The class room opens 10 minutes before the session."));
+  document.querySelectorAll(".open-help-call").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (state.practiceGate.locked) {
+        renderPracticeGate(true);
+        showToast("Upload the required practice before requesting a quick call.");
+        return;
+      }
+      openHelpCallModal();
+    });
   });
 
-  document.querySelectorAll(".open-help-call").forEach((button) => {
-    button.addEventListener("click", openHelpCallModal);
+  document.querySelector("#practice-gate-upload").addEventListener("click", () => {
+    document.querySelector("#practice-gate").hidden = true;
+    navigate("checkin", true);
+    const input = document.querySelector(`[data-upload-input="${state.practiceGate.activePeriod || "morning"}"]`);
+    input?.closest(".upload-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  document.querySelector("#practice-gate-snooze").addEventListener("click", () => {
+    sessionStorage.setItem("otsPracticeGateSnoozedUntil", String(Date.now() + 10 * 60 * 1000));
+    document.querySelector("#practice-gate").hidden = true;
+    navigate("checkin", true);
+    showToast("Reminder snoozed for 10 minutes. Other sections remain locked.");
+  });
+
+  document.querySelector("#close-classroom").addEventListener("click", closeClassroom);
+  document.querySelector("#toggle-classroom-mic").addEventListener("click", (event) => {
+    classroomMicEnabled = !classroomMicEnabled;
+    classroomStream?.getAudioTracks().forEach((track) => {
+      track.enabled = classroomMicEnabled;
+    });
+    event.currentTarget.textContent = classroomMicEnabled ? "Mute microphone" : "Unmute microphone";
+  });
+  document.querySelector("#toggle-classroom-camera").addEventListener("click", (event) => {
+    classroomCameraEnabled = !classroomCameraEnabled;
+    classroomStream?.getVideoTracks().forEach((track) => {
+      track.enabled = classroomCameraEnabled;
+    });
+    event.currentTarget.textContent = classroomCameraEnabled ? "Turn camera off" : "Turn camera on";
+  });
+  document.querySelector("#open-live-room").addEventListener("click", (event) => {
+    event.preventDefault();
+    const frame = document.querySelector("#classroom-frame");
+    frame.src = event.currentTarget.href;
+    frame.hidden = false;
   });
 
   document.querySelector("#help-call-form").addEventListener("submit", async (event) => {
@@ -792,6 +1000,10 @@ function bindEvents() {
     }
   });
 
+  document.querySelector("#join-help-classroom").addEventListener("click", () => {
+    openClassroom(`ots-help-call-${state.helpCall?.id || "room"}`);
+  });
+
   document.querySelector("#profile-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
@@ -829,7 +1041,11 @@ function bindEvents() {
   });
 
   document.querySelector("#notification-button").addEventListener("click", () => {
-    showToast(`Evening practice is due by 8:00 PM. ${teacherIdentity().firstName} reviewed your morning upload.`);
+    if (state.practiceGate.locked) {
+      renderPracticeGate(true);
+      return;
+    }
+    showToast(`Your practice is on track. ${teacherIdentity().firstName} will review new uploads here.`);
   });
 
   document.querySelector("#student-logout").addEventListener("click", logoutStudent);
