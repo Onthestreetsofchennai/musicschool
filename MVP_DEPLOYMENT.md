@@ -1,74 +1,49 @@
 # MUSIC SCHOOL OTS MVP Deployment
 
-## Service layout
+## One Cloudflare deployment
+
+Render and other Node hosting services are not required.
 
 ```text
-Student and teacher web apps
+Student / Admin browser
         |
         v
-Node API host
+Cloudflare Worker
         |
+        +--> Static app files
+        +--> Authentication and API
         +--> Neon PostgreSQL
-        +--> Cloudflare Email Worker
-        +--> Cloudinary private video storage
-        +--> Embedded live classroom
+        +--> Resend OTP email
 ```
 
-## 1. Neon
+Cloudflare deploys the Worker code and the files in `public/` together.
 
-1. Create a Neon project and copy its pooled connection string.
-2. Set `DATABASE_URL` locally or in the API host.
-3. Run `npm install`.
-4. Run `npm run neon:migrate`.
+## Required services
 
-The SQL source is `neon/schema.sql`.
-When `DATABASE_URL` is present, the production API automatically uses Neon.
-Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `TEACHER_EMAIL` and `TEACHER_PASSWORD` to
-create the first staff accounts.
+1. Cloudflare Workers for the app and backend.
+2. Neon PostgreSQL for persistent data.
+3. Resend for student OTP email delivery.
 
-## 2. Cloudflare OTP email
+## Student access
 
-1. Configure Email Routing and a verified sending address.
-2. Open `cloudflare/email-worker`.
-3. Change `ALLOWED_ORIGIN` in `wrangler.toml`.
-4. Add the secret:
+- There is no public signup.
+- An admin creates the student and email first.
+- Only an active registered student email can request an OTP.
+- OTP generation and validation run inside the Cloudflare Worker.
 
-```text
-npx wrangler secret put WORKER_SHARED_SECRET
-```
+## Staff access
 
-5. Deploy with `npx wrangler deploy`.
-6. Put the Worker URL and the same secret into
-   `CLOUDFLARE_EMAIL_WORKER_URL` and `CLOUDFLARE_EMAIL_WORKER_TOKEN`.
+- `ADMIN_EMAIL` and `ADMIN_PASSWORD` create the first Super Admin.
+- Super Admin creates teachers and additional admins from the Staff screen.
+- Teachers must be created before students can be assigned.
 
-## 3. Cloudinary videos
+## Practice check-ins
 
-1. Create a Cloudinary account and save its Cloud name, API key and API secret.
-2. Add these values only to the Node API host:
+For the current MVP, students choose a seven-minute video and the browser checks
+its duration. Neon stores the check-in details, but the video file is not yet
+uploaded.
 
-```text
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-```
+## Deployment
 
-3. Never put the API secret in browser code or GitHub.
-4. Student videos upload as private Cloudinary assets through signed requests.
-5. Teacher playback uses a signed URL that expires after 15 minutes.
-6. For the MVP, each video must be 100 MB or smaller.
-
-## 4. Practice gate
-
-- Morning practice becomes required at the start of the day.
-- Evening practice also becomes required from 5:00 PM Asia/Kolkata.
-- Each clip must be at least 420 seconds.
-- Snooze hides the reminder for ten minutes but does not unlock other areas.
-- Course, feedback, profile, help calls and classroom remain locked until the
-  required upload is stored.
-
-## 5. Classroom
-
-The MVP opens a unique embedded live room per student and scheduled session.
-The pre-room screen provides local camera and microphone controls. For a
-commercial launch, replace the public meeting host with a managed video
-provider and signed rooms.
+Upload the prepared project to GitHub, connect the repository in Cloudflare
+Workers & Pages, add the required secrets, and deploy.

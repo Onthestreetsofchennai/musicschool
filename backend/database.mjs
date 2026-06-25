@@ -1,9 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-
-const SKILL_FIELDS = ["rhythm", "accuracy", "technique", "posture", "musicality", "confidence"];
+import { hashPassword, normalizeSkillPayload, verifyPassword } from "./shared.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -20,18 +18,7 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function hashPassword(password, salt = randomBytes(16).toString("hex")) {
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
-}
-
-export function verifyPassword(password, encoded) {
-  const [salt, storedHash] = String(encoded || "").split(":");
-  if (!salt || !storedHash) return false;
-  const calculated = scryptSync(password, salt, 64);
-  const stored = Buffer.from(storedHash, "hex");
-  return stored.length === calculated.length && timingSafeEqual(stored, calculated);
-}
+export { hashPassword, normalizeSkillPayload, verifyPassword };
 
 export function createDatabase(databasePath) {
   mkdirSync(dirname(databasePath), { recursive: true });
@@ -102,6 +89,7 @@ function createSchema(db) {
     CREATE TABLE IF NOT EXISTS otp_challenges (
       id INTEGER PRIMARY KEY,
       student_account_id INTEGER NOT NULL REFERENCES student_accounts(id),
+      session_id TEXT UNIQUE,
       code_hash TEXT NOT NULL,
       code_salt TEXT NOT NULL,
       expires_at TEXT NOT NULL,
@@ -258,6 +246,12 @@ function createSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_otp_account_created ON otp_challenges(student_account_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash, revoked_at, expires_at);
   `);
+
+  const otpColumns = db.prepare("PRAGMA table_info(otp_challenges)").all();
+  if (!otpColumns.some((column) => column.name === "session_id")) {
+    db.exec("ALTER TABLE otp_challenges ADD COLUMN session_id TEXT;");
+  }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_otp_session_id ON otp_challenges(session_id) WHERE session_id IS NOT NULL;");
 }
 
 function seedDatabase(db) {
@@ -754,12 +748,4 @@ export function getStudentAnalysis(db, studentId) {
   `).all(studentId);
 
   return { student, latestSkills, skillTrend, submissions, sessions, alerts, helpCalls };
-}
-
-export function normalizeSkillPayload(payload) {
-  const result = {};
-  for (const field of [...SKILL_FIELDS, "feedback_application"]) {
-    result[field] = clamp(Number(payload[field]) || 1, 1, 5);
-  }
-  return result;
 }

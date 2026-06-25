@@ -9,9 +9,10 @@ A working MVP foundation for a guided 12-week music school.
 - Admin login and academic operations dashboard
 - Student email OTP login backed by database sessions
 - Admin enrollment form for real student email accounts
+- Super Admin staff management for multiple admins and teachers
 - Mandatory morning/evening practice gate
 - Minimum seven-minute video validation
-- Private Cloudinary video upload and expiring teacher playback
+- Temporary metadata-only practice check-ins for the first MVP
 - In-app classroom with camera/microphone preview and live room
 - Student 360 analysis with weighted scores and active alerts
 - Teacher review queue with seven skill ratings and written feedback
@@ -88,10 +89,9 @@ See `BACKEND_STRUCTURE.md` for the full data and workflow design.
 
 ## Current video behavior
 
-Local development previews the selected video and stores metadata only.
-Production creates a signed Cloudinary upload for a private video asset and
-stores only its asset key in the database. Teacher playback links expire after
-15 minutes.
+Students select a seven-minute practice video so the app can validate its
+duration. The first live MVP stores only the check-in details in Neon, not the
+video file itself. Private video storage will be added in the next phase.
 
 ## Reset demo data
 
@@ -99,6 +99,14 @@ Stop the server and delete `data/ots.db`, `data/ots.db-shm` and
 `data/ots.db-wal`. The next server start recreates clean demo data.
 
 ## Production MVP services
+
+Production is deployed as one Cloudflare Worker. Render is not required.
+
+### Cloudflare Worker
+
+The Worker serves the student app at `/`, the admin portal at `/admin`, and
+the secure backend API at `/api/*`. Cloudflare deploys the files in `public/`
+together with `cloudflare/worker.mjs`.
 
 ### Neon database
 
@@ -113,48 +121,41 @@ The migration creates the production PostgreSQL schema. Local development uses
 SQLite when `DATABASE_URL` is absent; production automatically uses Neon when
 `DATABASE_URL` is configured.
 
-### Cloudflare OTP email
+### Resend OTP email
 
-Deploy `cloudflare/email-worker`, add a Cloudflare Email Service binding named
-`SEND_EMAIL`, and set the `WORKER_SHARED_SECRET` Worker secret.
+Create a Resend API key, verify a sending domain, and set `RESEND_API_KEY` and
+`EMAIL_FROM` only in Cloudflare Worker secrets. Students can request an OTP only after
+an admin has created their student account and registered email.
 
-### Cloudinary practice videos
+### Practice check-ins
 
-Add the Cloudinary Cloud name, API key and API secret only to the Node hosting
-environment. Student videos upload as private assets using server-generated
-signatures. Teacher playback links expire after 15 minutes.
+The current production MVP stores practice duration, period, filename and
+review state in Neon. No separate video-storage account is required.
 
-### Environment variables
+### Cloudflare Worker secrets
 
 ```text
-NODE_ENV=production
 OTP_SECRET=replace-with-a-long-random-secret
+SESSION_SECRET=replace-with-a-different-long-random-secret
 DATABASE_URL=postgresql://...
 ADMIN_NAME=MUSIC SCHOOL Admin
 ADMIN_EMAIL=admin@your-domain.com
 ADMIN_PASSWORD=replace-with-a-strong-admin-password
-TEACHER_NAME=Primary Music Teacher
-TEACHER_EMAIL=teacher@your-domain.com
-TEACHER_PASSWORD=replace-with-a-strong-teacher-password
-TEACHER_INSTRUMENT=Guitar
-CLOUDFLARE_EMAIL_WORKER_URL=https://ots-otp-email...workers.dev
-CLOUDFLARE_EMAIL_WORKER_TOKEN=replace-with-worker-shared-secret
-OTP_FROM_EMAIL=MUSIC SCHOOL OTS <login@your-verified-domain.com>
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
+RESEND_API_KEY=re_xxxxxxxxx
+EMAIL_FROM=MUSIC SCHOOL OTS <login@your-verified-domain.com>
 MIN_PRACTICE_SECONDS=420
-MAX_PRACTICE_VIDEO_BYTES=100000000
 ```
 
-Without Cloudflare email and Cloudinary credentials, local development uses
-OTP display and metadata-only video submissions.
+Without Resend credentials, local development displays OTP codes on
+screen. Practice submissions remain metadata-only in both environments.
+
+See `GITHUB_DEPLOYMENT.md` for the Cloudflare GitHub deployment steps.
 
 ## Production work still required
 
-- Cloudinary retention and automatic cleanup rules
+- Private practice-video storage and retention rules
 - Notifications through push, email or WhatsApp
 - Payments and course enrollment
 - Production Neon runtime adapter and managed migrations
-- Rate limiting, CSRF strategy and password recovery
+- CSRF strategy and staff password recovery
 - Automated unit, integration and accessibility tests

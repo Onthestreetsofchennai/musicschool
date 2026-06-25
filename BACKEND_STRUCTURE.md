@@ -15,6 +15,11 @@ Teachers are restricted to their assigned roster at the API layer. Students are
 restricted to their own data through email OTP login and hashed database-backed
 sessions.
 
+There is no public student registration. A Super Admin, Academic Head or
+Operations Admin creates the student and registered email first. Only that
+active email can request an OTP. Super Admin separately creates and controls
+admin and teacher accounts.
+
 ## 2. Core data
 
 | Area | Tables |
@@ -90,6 +95,13 @@ System alerts are generated for:
 - Filter by health status
 - Open Student 360
 
+### Staff
+
+- Super Admin only
+- Create multiple admins and teachers
+- Activate or deactivate staff access
+- Prevent teacher deactivation while active students remain assigned
+
 ### Student 360
 
 - Four score components and overall score
@@ -120,16 +132,17 @@ System alerts are generated for:
 Student / Parent App
         |
         v
-API, OTP email and authentication
+Cloudflare Worker: app, API, OTP and authentication
         |
-        +--> PostgreSQL: users, student accounts, OTP sessions and analysis
-        +--> Cloudinary: private practice videos
+        +--> Neon PostgreSQL: users, OTP sessions and analysis
+        +--> Resend: OTP email delivery
         +--> Queue workers: video processing and notifications
         +--> Meeting provider: live sessions and help calls
         +--> Admin portal: teachers, academic heads and operations
 ```
 
 SQLite remains the local development database. `neon/schema.sql` defines the
-production PostgreSQL schema. Cloudflare Workers provide OTP delivery, while
-the Node API signs private Cloudinary uploads and expiring playback links.
-Production secrets stay in the hosting and Worker environments.
+production PostgreSQL schema. Resend provides email delivery while OTP
+generation and validation stay inside the backend. The first MVP stores
+practice check-in metadata without uploading video binaries. Production
+secrets stay only in Cloudflare Worker secrets.

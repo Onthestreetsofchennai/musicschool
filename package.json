@@ -5,11 +5,16 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check backend/database.mjs && node --check backend/neon-api.mjs && node --check app.js && node --check admin.js && node --check service-worker.js",
-    "neon:migrate": "node scripts/migrate-neon.mjs"
+    "check": "node --check server.mjs && node --check backend/shared.mjs && node --check backend/database.mjs && node --check backend/neon-api.mjs && node --check cloudflare/worker.mjs && node --check app.js && node --check admin.js && node --check service-worker.js",
+    "neon:migrate": "node scripts/migrate-neon.mjs",
+    "cloudflare:dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   },
   "engines": {
     "node": ">=24"

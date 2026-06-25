@@ -1,0 +1,17 @@
+{
+  "name": "MUSIC SCHOOL OTS",
+  "short_name": "OTS Music",
+  "description": "A guided 12-week music learning and accountability app.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f4f9",
+  "theme_color": "#111426",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

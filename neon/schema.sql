@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS student_preferences (
 CREATE TABLE IF NOT EXISTS otp_challenges (
   id BIGSERIAL PRIMARY KEY,
   student_account_id BIGINT NOT NULL REFERENCES student_accounts(id) ON DELETE CASCADE,
+  session_id TEXT UNIQUE,
   code_hash TEXT NOT NULL,
   code_salt TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
@@ -61,6 +62,8 @@ CREATE TABLE IF NOT EXISTS otp_challenges (
   delivery_status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE otp_challenges ADD COLUMN IF NOT EXISTS session_id TEXT;
 
 CREATE TABLE IF NOT EXISTS auth_sessions (
   id BIGSERIAL PRIMARY KEY,
@@ -209,4 +212,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_daily_period_submission
 CREATE INDEX IF NOT EXISTS idx_sessions_student_date ON live_sessions(student_id, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_student_resolved ON student_alerts(student_id, resolved);
 CREATE INDEX IF NOT EXISTS idx_otp_account_created ON otp_challenges(student_account_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_otp_session_id ON otp_challenges(session_id) WHERE session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash, revoked_at, expires_at);

@@ -12,6 +12,7 @@ import {
 import {
   createDatabase,
   getStudentAnalysis,
+  hashPassword,
   logAudit,
   normalizeSkillPayload,
   recalculateStudent,
@@ -26,14 +27,15 @@ const HOST = process.env.HOST || (IS_PRODUCTION ? "0.0.0.0" : "127.0.0.1");
 const USE_NEON = Boolean(process.env.DATABASE_URL);
 const db = USE_NEON ? null : createDatabase(join(ROOT, "data", "ots.db"));
 const OTP_SECRET = process.env.OTP_SECRET || "music-school-ots-development-secret";
-const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
-const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || "";
-const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || "";
-const OTP_EXPIRY_MINUTES = 10;
-const STUDENT_SESSION_DAYS = 14;
+const SESSION_SECRET = process.env.SESSION_SECRET || "music-school-ots-development-session-secret";
+const OTP_EXPIRY_MINUTES = 5;
+const STUDENT_SESSION_DAYS = 7;
 const STAFF_SESSION_HOURS = 12;
 const MIN_PRACTICE_SECONDS = Number(process.env.MIN_PRACTICE_SECONDS || 420);
-const MAX_PRACTICE_VIDEO_BYTES = Number(process.env.MAX_PRACTICE_VIDEO_BYTES || 100_000_000);
+
+if (IS_PRODUCTION && (!process.env.OTP_SECRET || !process.env.SESSION_SECRET)) {
+  throw new Error("OTP_SECRET and SESSION_SECRET are required in production");
+}
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -98,92 +100,38 @@ function hashToken(token) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function createPracticeUploadReceipt({ studentId, period, publicId }) {
-  const payload = Buffer.from(JSON.stringify({
-    action: "upload",
-    studentId,
-    period,
-    publicId,
-    expiresAt: Date.now() + 10 * 60 * 1000
-  })).toString("base64url");
-  const signature = createHmac("sha256", OTP_SECRET).update(payload).digest("base64url");
-  return `${payload}.${signature}`;
+function signSessionToken(payload) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", SESSION_SECRET).update(encodedPayload).digest("base64url");
+  return `${encodedPayload}.${signature}`;
 }
 
-function verifyPracticeUploadReceipt(receipt, { studentId, period, storageKey }) {
-  const [payload, signature] = String(receipt || "").split(".");
-  if (!payload || !signature) return false;
-  const expected = createHmac("sha256", OTP_SECRET).update(payload).digest("base64url");
-  const providedBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
-  if (providedBuffer.length !== expectedBuffer.length || !timingSafeEqual(providedBuffer, expectedBuffer)) return false;
+function verifySessionToken(token) {
+  const [encodedPayload, suppliedSignature] = String(token || "").split(".");
+  if (!encodedPayload || !suppliedSignature) return null;
+  const expectedSignature = createHmac("sha256", SESSION_SECRET).update(encodedPayload).digest();
+  const suppliedBuffer = Buffer.from(suppliedSignature, "base64url");
+  if (suppliedBuffer.length !== expectedSignature.length || !timingSafeEqual(suppliedBuffer, expectedSignature)) return null;
   try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return data.action === "upload" &&
-      Number(data.studentId) === Number(studentId) &&
-      data.period === period &&
-      Date.now() <= Number(data.expiresAt) &&
-      String(storageKey).startsWith(`${data.publicId}.`);
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    return Number(payload.exp) > Date.now() ? payload : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-function signCloudinaryParameters(parameters) {
-  const serialized = Object.entries(parameters)
-    .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("&");
-  return createHash("sha1").update(`${serialized}${CLOUDINARY_API_SECRET}`).digest("hex");
-}
-
-function cloudinaryIsConfigured() {
-  return Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET);
-}
-
-function createCloudinaryPrivateDownloadUrl(storageKey) {
-  const separator = storageKey.lastIndexOf(".");
-  if (separator <= 0 || separator === storageKey.length - 1) return null;
-  const publicId = storageKey.slice(0, separator);
-  const format = storageKey.slice(separator + 1);
-  const timestamp = Math.floor(Date.now() / 1000);
-  const expiresAt = timestamp + 15 * 60;
-  const parameters = {
-    expires_at: expiresAt,
-    format,
-    public_id: publicId,
-    timestamp,
-    type: "private"
-  };
-  const query = new URLSearchParams({
-    ...Object.fromEntries(Object.entries(parameters).map(([key, value]) => [key, String(value)])),
-    signature: signCloudinaryParameters(parameters),
-    api_key: CLOUDINARY_API_KEY
-  });
-  return `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/video/download?${query}`;
-}
-
-function cloudinaryUploadConfig({ studentId, period }) {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const publicId = `music-school-ots/students/${studentId}/${period}-${timestamp}-${randomUUID()}`;
-  const uploadParameters = { public_id: publicId, timestamp, type: "private" };
-  return {
-    uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/video/upload`,
-    cloudName: CLOUDINARY_CLOUD_NAME,
-    apiKey: CLOUDINARY_API_KEY,
-    timestamp,
-    publicId,
-    deliveryType: "private",
-    signature: signCloudinaryParameters(uploadParameters),
-    storageMode: "cloudinary-private"
-  };
-}
-
 function createAuthSession({ principalType, userId = null, studentId = null, role, ttlMilliseconds }) {
-  const token = randomBytes(32).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + ttlMilliseconds);
+  const token = signSessionToken({
+    version: 1,
+    principalType,
+    userId,
+    studentId,
+    role,
+    exp: expiresAt.getTime(),
+    nonce: randomBytes(16).toString("base64url")
+  });
   db.prepare(`
     INSERT INTO auth_sessions (
       token_hash, principal_type, user_id, student_id, role,
@@ -204,15 +152,19 @@ function createAuthSession({ principalType, userId = null, studentId = null, rol
 
 function getAuthSession(request) {
   const token = getToken(request);
-  if (!token) return null;
+  const claims = verifySessionToken(token);
+  if (!claims) return null;
   const tokenHash = hashToken(token);
   const row = db.prepare(`
     SELECT
       auth.*,
       u.name AS staff_name,
       u.email AS staff_email,
+      u.active AS staff_active,
       s.name AS student_name,
-      account.email AS student_email
+      s.active AS student_active,
+      account.email AS student_email,
+      account.active AS student_account_active
     FROM auth_sessions auth
     LEFT JOIN users u ON u.id = auth.user_id
     LEFT JOIN students s ON s.id = auth.student_id
@@ -220,6 +172,14 @@ function getAuthSession(request) {
     WHERE auth.token_hash = ? AND auth.revoked_at IS NULL
   `).get(tokenHash);
   if (!row) return null;
+  if (row.principal_type === "staff" && !row.staff_active) return null;
+  if (row.principal_type === "student" && (!row.student_active || !row.student_account_active)) return null;
+  if (
+    claims.principalType !== row.principal_type ||
+    String(claims.userId || "") !== String(row.user_id || "") ||
+    String(claims.studentId || "") !== String(row.student_id || "") ||
+    claims.role !== row.role
+  ) return null;
   if (new Date(row.expires_at) <= new Date()) {
     db.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE id = ?").run(new Date().toISOString(), row.id);
     return null;
@@ -260,12 +220,12 @@ function requireStudentAuth(request, response) {
   return session;
 }
 
-function hashOtp(code, salt) {
-  return createHmac("sha256", OTP_SECRET).update(`${salt}:${code}`).digest("hex");
+function hashOtp(code, sessionId) {
+  return createHmac("sha256", OTP_SECRET).update(`${sessionId}:${code}`).digest("hex");
 }
 
-function otpMatches(code, salt, expectedHash) {
-  const calculated = Buffer.from(hashOtp(code, salt), "hex");
+function otpMatches(code, sessionId, expectedHash) {
+  const calculated = Buffer.from(hashOtp(code, sessionId), "hex");
   const stored = Buffer.from(expectedHash, "hex");
   return calculated.length === stored.length && timingSafeEqual(calculated, stored);
 }
@@ -280,9 +240,8 @@ function escapeHtml(value) {
 }
 
 async function deliverOtpEmail({ email, studentName, code, challengeId }) {
-  const cloudflareWorkerUrl = process.env.CLOUDFLARE_EMAIL_WORKER_URL;
-  const cloudflareWorkerToken = process.env.CLOUDFLARE_EMAIL_WORKER_TOKEN;
-  const from = process.env.OTP_FROM_EMAIL;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM;
   const subject = `${code} is your MUSIC SCHOOL OTS login code`;
   const text = `Hello ${studentName}, your MUSIC SCHOOL OTS login code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`;
   const html = `
@@ -295,17 +254,17 @@ async function deliverOtpEmail({ email, studentName, code, challengeId }) {
     </div>
   `;
 
-  if (cloudflareWorkerUrl && cloudflareWorkerToken && from) {
-    const response = await fetch(cloudflareWorkerUrl, {
+  if (resendApiKey && from) {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${cloudflareWorkerToken}`,
+        Authorization: `Bearer ${resendApiKey}`,
         "Content-Type": "application/json",
         "Idempotency-Key": `ots-otp-${challengeId}`
       },
       body: JSON.stringify({
         from,
-        to: email,
+        to: [email],
         subject,
         text,
         html
@@ -313,9 +272,10 @@ async function deliverOtpEmail({ email, studentName, code, challengeId }) {
     });
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Cloudflare OTP email delivery failed: ${detail.slice(0, 240)}`);
+      throw new Error(`Resend OTP email delivery failed: ${detail.slice(0, 240)}`);
     }
-    return { mode: "cloudflare" };
+    const delivery = await response.json().catch(() => ({}));
+    return { mode: "resend", messageId: delivery.id || null };
   }
 
   if (IS_PRODUCTION) {
@@ -608,7 +568,8 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, {
       status: "ok",
       database: "sqlite",
-      emailDelivery: process.env.CLOUDFLARE_EMAIL_WORKER_URL && process.env.OTP_FROM_EMAIL ? "cloudflare" : "development",
+      emailDelivery: process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "resend" : "development",
+      videoStorage: "metadata-only-mvp",
       time: new Date().toISOString()
     });
   }
@@ -626,16 +587,30 @@ async function handleApi(request, response, url) {
     `).get(email);
 
     const genericMessage = "If this email is registered, a login code has been sent.";
-    if (!account) return sendJson(response, 200, { ok: true, message: genericMessage });
+    if (!account) {
+      return sendJson(response, 200, {
+        ok: true,
+        message: genericMessage,
+        sessionId: randomUUID(),
+        expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60_000).toISOString(),
+        expiresInSeconds: OTP_EXPIRY_MINUTES * 60
+      });
+    }
 
     const recentRequests = db.prepare(`
-      SELECT COUNT(*) AS count
+      SELECT COUNT(*) AS count, MAX(created_at) AS latest_created_at
       FROM otp_challenges
       WHERE student_account_id = ?
-        AND julianday(created_at) >= julianday('now', '-10 minutes')
-    `).get(account.id).count;
-    if (recentRequests >= 3) {
-      return sendJson(response, 429, { error: "Too many codes requested. Please wait 10 minutes." });
+        AND julianday(created_at) >= julianday('now', '-1 hour')
+    `).get(account.id);
+    if (recentRequests.count >= 5) {
+      return sendJson(response, 429, { error: "Too many codes requested. Please try again after one hour." });
+    }
+    if (
+      recentRequests.latest_created_at &&
+      Date.now() - new Date(recentRequests.latest_created_at).getTime() < 60_000
+    ) {
+      return sendJson(response, 429, { error: "Please wait 60 seconds before requesting another code." });
     }
 
     db.prepare(`
@@ -645,15 +620,22 @@ async function handleApi(request, response, url) {
     `).run(new Date().toISOString(), account.id);
 
     const code = String(randomInt(100000, 1_000_000));
-    const salt = randomBytes(16).toString("hex");
+    const otpSessionId = randomUUID();
     const createdAt = new Date();
     const expiresAt = new Date(createdAt.getTime() + OTP_EXPIRY_MINUTES * 60_000);
     const challengeResult = db.prepare(`
       INSERT INTO otp_challenges (
-        student_account_id, code_hash, code_salt, expires_at,
+        student_account_id, session_id, code_hash, code_salt, expires_at,
         attempts, max_attempts, delivery_status, created_at
-      ) VALUES (?, ?, ?, ?, 0, 5, 'pending', ?)
-    `).run(account.id, hashOtp(code, salt), salt, expiresAt.toISOString(), createdAt.toISOString());
+      ) VALUES (?, ?, ?, ?, ?, 0, 5, 'pending', ?)
+    `).run(
+      account.id,
+      otpSessionId,
+      hashOtp(code, otpSessionId),
+      otpSessionId,
+      expiresAt.toISOString(),
+      createdAt.toISOString()
+    );
     const challengeId = Number(challengeResult.lastInsertRowid);
 
     try {
@@ -666,7 +648,9 @@ async function handleApi(request, response, url) {
       db.prepare("UPDATE otp_challenges SET delivery_status = 'sent' WHERE id = ?").run(challengeId);
       return sendJson(response, 200, {
         ok: true,
-        message: delivery.mode === "cloudflare" ? "Login code sent to your email." : "Development login code generated.",
+        message: delivery.mode === "resend" ? "Login code sent to your email." : "Development login code generated.",
+        sessionId: otpSessionId,
+        expiresAt: expiresAt.toISOString(),
         expiresInSeconds: OTP_EXPIRY_MINUTES * 60,
         developmentOtp: delivery.developmentOtp
       });
@@ -680,8 +664,9 @@ async function handleApi(request, response, url) {
   if (pathname === "/api/student-auth/verify-otp" && request.method === "POST") {
     const body = await readJson(request);
     const email = normalizeEmail(body.email);
+    const otpSessionId = String(body.sessionId || "").trim();
     const code = String(body.otp || "").trim();
-    if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
+    if (!isValidEmail(email) || !otpSessionId || !/^\d{6}$/.test(code)) {
       return sendJson(response, 400, { error: "Enter the six-digit login code" });
     }
 
@@ -696,10 +681,10 @@ async function handleApi(request, response, url) {
     const challenge = db.prepare(`
       SELECT *
       FROM otp_challenges
-      WHERE student_account_id = ? AND consumed_at IS NULL AND delivery_status = 'sent'
-      ORDER BY id DESC
+      WHERE student_account_id = ? AND session_id = ?
+        AND consumed_at IS NULL AND delivery_status = 'sent'
       LIMIT 1
-    `).get(account.id);
+    `).get(account.id, otpSessionId);
     if (
       !challenge ||
       new Date(challenge.expires_at) <= new Date() ||
@@ -708,7 +693,7 @@ async function handleApi(request, response, url) {
       return sendJson(response, 401, { error: "Invalid or expired login code" });
     }
 
-    if (!otpMatches(code, challenge.code_salt, challenge.code_hash)) {
+    if (!otpMatches(code, otpSessionId, challenge.code_hash)) {
       db.prepare("UPDATE otp_challenges SET attempts = attempts + 1 WHERE id = ?").run(challenge.id);
       return sendJson(response, 401, { error: "Invalid or expired login code" });
     }
@@ -812,6 +797,96 @@ async function handleApi(request, response, url) {
     const session = requireAuth(request, response, ["super_admin", "academic_head", "operations"]);
     if (!session) return;
     return sendJson(response, 200, { teachers: getTeachersOverview() });
+  }
+
+  if (pathname === "/api/staff" && request.method === "GET") {
+    const session = requireAuth(request, response, ["super_admin"]);
+    if (!session) return;
+    const staff = db.prepare(`
+      SELECT u.id, u.name, u.email, u.role, u.active, u.created_at,
+        t.id AS teacher_id, t.instrument,
+        COUNT(DISTINCT s.id) AS student_count
+      FROM users u
+      LEFT JOIN teachers t ON t.user_id = u.id
+      LEFT JOIN students s ON s.assigned_teacher_id = t.id AND s.active = 1
+      GROUP BY u.id, t.id
+      ORDER BY u.active DESC, u.name
+    `).all();
+    return sendJson(response, 200, { staff });
+  }
+
+  if (pathname === "/api/staff" && request.method === "POST") {
+    const session = requireAuth(request, response, ["super_admin"]);
+    if (!session) return;
+    const body = await readJson(request);
+    const name = String(body.name || "").trim();
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "");
+    const role = String(body.role || "");
+    const instrument = String(body.instrument || "").trim();
+    const allowedRoles = ["super_admin", "academic_head", "operations", "teacher"];
+    if (name.length < 2 || !isValidEmail(email) || password.length < 8 || !allowedRoles.includes(role)) {
+      return sendJson(response, 400, { error: "Name, valid email, role and a password of at least 8 characters are required" });
+    }
+    if (role === "teacher" && !instrument) {
+      return sendJson(response, 400, { error: "Instrument is required for a teacher" });
+    }
+    if (db.prepare("SELECT id FROM users WHERE email = ?").get(email)) {
+      return sendJson(response, 409, { error: "A staff account already uses this email" });
+    }
+    const createdAt = new Date().toISOString();
+    db.exec("BEGIN");
+    try {
+      const result = db.prepare(`
+        INSERT INTO users (name, email, password_hash, role, active, created_at)
+        VALUES (?, ?, ?, ?, 1, ?)
+      `).run(name, email, hashPassword(password), role, createdAt);
+      const userId = Number(result.lastInsertRowid);
+      if (role === "teacher") {
+        db.prepare(`
+          INSERT INTO teachers (user_id, instrument, bio, review_sla_hours, active)
+          VALUES (?, ?, ?, 12, 1)
+        `).run(userId, instrument, "MUSIC SCHOOL OTS teacher.");
+      }
+      db.exec("COMMIT");
+      logAudit(db, session.userId, "create_staff", "user", userId, { email, role });
+      return sendJson(response, 201, { id: userId, name, email, role, active: true, instrument: role === "teacher" ? instrument : null });
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  const staffStatusMatch = pathname.match(/^\/api\/staff\/(\d+)\/status$/);
+  if (staffStatusMatch && request.method === "PATCH") {
+    const session = requireAuth(request, response, ["super_admin"]);
+    if (!session) return;
+    const staffId = Number(staffStatusMatch[1]);
+    const body = await readJson(request);
+    const active = Boolean(body.active);
+    const target = db.prepare(`
+      SELECT u.*, t.id AS teacher_id
+      FROM users u LEFT JOIN teachers t ON t.user_id = u.id
+      WHERE u.id = ?
+    `).get(staffId);
+    if (!target) return sendJson(response, 404, { error: "Staff account not found" });
+    if (staffId === session.userId && !active) {
+      return sendJson(response, 400, { error: "You cannot deactivate your own account" });
+    }
+    if (!active && target.teacher_id) {
+      const assigned = db.prepare("SELECT COUNT(*) AS count FROM students WHERE assigned_teacher_id = ? AND active = 1").get(target.teacher_id);
+      if (assigned.count > 0) {
+        return sendJson(response, 409, { error: "Reassign this teacher's active students before deactivating the account" });
+      }
+    }
+    db.prepare("UPDATE users SET active = ? WHERE id = ?").run(active ? 1 : 0, staffId);
+    if (target.teacher_id) db.prepare("UPDATE teachers SET active = ? WHERE id = ?").run(active ? 1 : 0, target.teacher_id);
+    if (!active) {
+      db.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
+        .run(new Date().toISOString(), staffId);
+    }
+    logAudit(db, session.userId, active ? "activate_staff" : "deactivate_staff", "user", staffId);
+    return sendJson(response, 200, { ok: true, active });
   }
 
   if (pathname === "/api/teacher/overview" && request.method === "GET") {
@@ -989,15 +1064,10 @@ async function handleApi(request, response, url) {
     if (scopedTeacherId !== null && submission.teacher_id !== scopedTeacherId) {
       return sendJson(response, 403, { error: "Submission is outside your assigned review queue" });
     }
-    if (!cloudinaryIsConfigured() || !IS_PRODUCTION) {
-      return sendJson(response, 200, { playbackUrl: null, storageMode: "metadata-only" });
-    }
-    const playbackUrl = createCloudinaryPrivateDownloadUrl(submission.storage_key);
-    if (!playbackUrl) return sendJson(response, 422, { error: "The stored video reference is invalid" });
     return sendJson(response, 200, {
-      playbackUrl,
-      storageMode: "cloudinary-private",
-      expiresInSeconds: 900
+      playbackUrl: null,
+      storageMode: "metadata-only-mvp",
+      message: "Video playback will be enabled in the next storage phase."
     });
   }
 
@@ -1126,38 +1196,9 @@ async function handleApi(request, response, url) {
     if (!contentType.startsWith("video/")) {
       return sendJson(response, 400, { error: "Only video uploads are allowed" });
     }
-    const fileSize = Math.round(Number(body.fileSize) || 0);
-    if (fileSize <= 0 || fileSize > MAX_PRACTICE_VIDEO_BYTES) {
-      return sendJson(response, 400, { error: "Practice videos must be 100 MB or smaller for the MVP." });
-    }
-    if (!cloudinaryIsConfigured() && IS_PRODUCTION) {
-      return sendJson(response, 503, { error: "Cloud video storage is not configured" });
-    }
-    if (!cloudinaryIsConfigured()) {
-      return sendJson(response, 200, {
-        uploadUrl: null,
-        storageMode: "metadata-only",
-        maxFileBytes: MAX_PRACTICE_VIDEO_BYTES
-      });
-    }
-    const timestamp = Math.floor(Date.now() / 1000);
-    const publicId = `music-school-ots/students/${session.studentId}/${period}-${timestamp}-${randomUUID()}`;
-    const uploadParameters = {
-      public_id: publicId,
-      timestamp,
-      type: "private"
-    };
     return sendJson(response, 200, {
-      uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/video/upload`,
-      cloudName: CLOUDINARY_CLOUD_NAME,
-      apiKey: CLOUDINARY_API_KEY,
-      timestamp,
-      publicId,
-      deliveryType: "private",
-      signature: signCloudinaryParameters(uploadParameters),
-      uploadReceipt: createPracticeUploadReceipt({ studentId: session.studentId, period, publicId }),
-      storageMode: "cloudinary-private",
-      maxFileBytes: MAX_PRACTICE_VIDEO_BYTES
+      uploadUrl: null,
+      storageMode: "metadata-only-mvp"
     });
   }
 
@@ -1182,16 +1223,8 @@ async function handleApi(request, response, url) {
     if (existingSubmission) return sendJson(response, 409, { error: `${body.period} practice was already submitted today` });
     const uploadedAt = new Date().toISOString();
     const fileName = String(body.fileName || `${body.period}-practice.mp4`);
-    const storageKey = String(body.storageKey || "") ||
-      `students/${studentId}/week-${student.current_week}/${randomUUID()}-${fileName.replaceAll(/[^a-zA-Z0-9._-]/g, "-")}`;
-    if (IS_PRODUCTION && (!String(body.storageKey || "") ||
-      !verifyPracticeUploadReceipt(body.uploadReceipt, {
-        studentId,
-        period: body.period,
-        storageKey
-      }))) {
-      return sendJson(response, 400, { error: "The practice video must finish uploading before submission" });
-    }
+    const storageKey =
+      `metadata/students/${studentId}/${body.period}-${Date.now()}-${randomUUID()}`;
     const result = db.prepare(`
       INSERT INTO practice_submissions (
         student_id, teacher_id, course_week, period, duration_seconds,
@@ -1208,7 +1241,13 @@ async function handleApi(request, response, url) {
       uploadedAt
     );
     recalculateStudent(db, studentId);
-    return sendJson(response, 201, { id: Number(result.lastInsertRowid), storageKey, uploadedAt, reviewStatus: "pending" });
+    return sendJson(response, 201, {
+      id: Number(result.lastInsertRowid),
+      storageKey: "metadata-only",
+      storageMode: "metadata-only-mvp",
+      uploadedAt,
+      reviewStatus: "pending"
+    });
   }
 
   if (pathname === "/api/student/me/help-calls" && request.method === "POST") {
@@ -1343,14 +1382,10 @@ const neonApi = USE_NEON
       readJson,
       getToken,
       deliverOtpEmail,
-      createPracticeUploadReceipt,
-      verifyPracticeUploadReceipt,
-      cloudinaryIsConfigured,
-      createCloudinaryPrivateDownloadUrl,
-      cloudinaryUploadConfig,
       minPracticeSeconds: MIN_PRACTICE_SECONDS,
-      maxPracticeVideoBytes: MAX_PRACTICE_VIDEO_BYTES,
-      otpSecret: OTP_SECRET
+      otpSecret: OTP_SECRET,
+      signSessionToken,
+      verifySessionToken
     })
   : null;
 
