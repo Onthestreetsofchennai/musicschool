@@ -25,17 +25,17 @@
       <div class="onboarding-copy">
         <p class="eyebrow">WELCOME BACK</p>
         <h1>Sign in to your course.</h1>
-        <p>Enter the email registered with MUSIC SCHOOL OTS. We will send a secure six-digit login code.</p>
+        <p>Enter the email registered with MUSIC SCHOOL OTS. We will generate a secure six-digit login code.</p>
       </div>
       <form id="student-email-form" class="stack-form">
         <label>
           Registered email address
           <input id="student-login-email" name="email" type="email" autocomplete="email" placeholder="student@example.com" required>
         </label>
-        <button class="button button-primary button-large" type="submit">Send login code</button>
+        <button class="button button-primary button-large" type="submit">Get login code</button>
       </form>
       <form id="student-otp-form" class="stack-form" hidden>
-        <p class="auth-destination">Code sent to <strong id="student-otp-email"></strong></p>
+        <p class="auth-destination"><span id="otp-delivery-message">Code sent to</span> <strong id="student-otp-email"></strong></p>
         <label>
           Six-digit login code
           <input id="student-login-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required>
@@ -44,7 +44,7 @@
         <button class="text-button auth-back" id="student-change-email" type="button">Use a different email</button>
       </form>
       <div class="development-otp" id="development-otp" hidden>
-        <span>Local development code</span>
+        <span>Temporary login code</span>
         <strong id="development-otp-code"></strong>
       </div>
       <p class="auth-error" id="student-auth-error" hidden></p>

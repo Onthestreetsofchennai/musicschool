@@ -1,5 +1,8 @@
 const STORAGE_KEY = "musicSchoolOTSStateV1";
 const STUDENT_TOKEN_KEY = "otsStudentToken";
+const API_ORIGIN = window.location.hostname === "school.onthestreets.in"
+  ? "https://music-school-ots.sharoncornerstone56.workers.dev"
+  : "";
 
 const courseWeeks = [
   {
@@ -169,7 +172,7 @@ async function apiRequest(path, options = {}) {
     ...(options.headers || {})
   };
   if (studentToken) headers.Authorization = `Bearer ${studentToken}`;
-  const response = await fetch(path, {
+  const response = await fetch(`${API_ORIGIN}${path}`, {
     headers,
     ...options
   });
@@ -781,6 +784,8 @@ async function requestStudentOtp(event) {
       body: JSON.stringify({ email: pendingLoginEmail })
     });
     pendingOtpSessionId = result.sessionId || "";
+    document.querySelector("#otp-delivery-message").textContent =
+      result.deliveryMode === "screen" ? "Temporary code for" : "Code sent to";
     document.querySelector("#student-otp-email").textContent = pendingLoginEmail;
     document.querySelector("#student-email-form").hidden = true;
     document.querySelector("#student-otp-form").hidden = false;

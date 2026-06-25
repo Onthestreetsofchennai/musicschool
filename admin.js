@@ -1,4 +1,7 @@
 const ADMIN_TOKEN_KEY = "otsAdminToken";
+const API_ORIGIN = window.location.hostname === "school.onthestreets.in"
+  ? "https://music-school-ots.sharoncornerstone56.workers.dev"
+  : "";
 
 let adminToken = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
 let adminUser = null;
@@ -37,7 +40,7 @@ function showToast(message) {
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (adminToken) headers.Authorization = `Bearer ${adminToken}`;
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetch(`${API_ORIGIN}${path}`, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && path !== "/api/auth/login") logout(false);
@@ -54,7 +57,7 @@ function setLoggedIn(loggedIn) {
 async function logout(showMessage = true) {
   const tokenToRevoke = adminToken;
   if (tokenToRevoke) {
-    fetch("/api/auth/logout", {
+    fetch(`${API_ORIGIN}/api/auth/logout`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${tokenToRevoke}`,
@@ -203,8 +206,9 @@ function renderEnrollmentTeachers() {
 
 async function createStudent(event) {
   event.preventDefault();
+  const form = event.currentTarget;
   const error = document.querySelector("#create-student-error");
-  const submitButton = event.currentTarget.querySelector("button[type='submit']");
+  const submitButton = form.querySelector("button[type='submit']");
   error.hidden = true;
   submitButton.disabled = true;
   try {
@@ -222,7 +226,7 @@ async function createStudent(event) {
         parentEmail: document.querySelector("#create-parent-email").value.trim()
       })
     });
-    event.currentTarget.reset();
+    form.reset();
     document.querySelector("#create-student-modal").close();
     await Promise.all([loadStudents(), loadDashboard()]);
     showToast("Student account created. OTP login is ready.");
@@ -279,8 +283,9 @@ function openCreateStaff() {
 
 async function createStaff(event) {
   event.preventDefault();
+  const form = event.currentTarget;
   const error = document.querySelector("#create-staff-error");
-  const submitButton = event.currentTarget.querySelector("button[type='submit']");
+  const submitButton = form.querySelector("button[type='submit']");
   const role = document.querySelector("#create-staff-role").value;
   error.hidden = true;
   submitButton.disabled = true;
@@ -295,7 +300,7 @@ async function createStaff(event) {
         instrument: role === "teacher" ? document.querySelector("#create-staff-instrument").value : ""
       })
     });
-    event.currentTarget.reset();
+    form.reset();
     updateStaffInstrumentField();
     document.querySelector("#create-staff-modal").close();
     await loadStaff();
