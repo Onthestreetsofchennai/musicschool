@@ -1,178 +1,670 @@
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('super_admin', 'academic_head', 'teacher', 'operations')),
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111426">
+  <title>OTS Admin | Student Analysis</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <div class="admin-login" id="admin-login">
+    <section class="login-card">
+      <div class="admin-brand">
+        <span class="brand-mark">OTS</span>
+        <span>
+          <strong>MUSIC SCHOOL</strong>
+          <small>Academic operations</small>
+        </span>
+      </div>
+      <div class="login-copy">
+        <p class="eyebrow">ADMIN PORTAL</p>
+        <h1>Student analysis and teacher operations.</h1>
+        <p>Monitor practice consistency, attendance, skill improvement, feedback application and intervention alerts.</p>
+      </div>
+      <form id="login-form" class="admin-form" autocomplete="off">
+        <label>
+          Email
+          <input id="login-email" type="email" autocomplete="off" required>
+        </label>
+        <label>
+          Password
+          <input id="login-password" type="password" autocomplete="new-password" required>
+        </label>
+        <button class="admin-button primary large" type="submit">Sign in</button>
+        <p class="form-error" id="login-error" hidden></p>
+      </form>
+      <div class="demo-credentials">
+        <strong>Administrator access</strong>
+        <span>Use the admin email and password configured for this school.</span>
+      </div>
+    </section>
+  </div>
 
-CREATE TABLE IF NOT EXISTS teachers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
-  instrument TEXT NOT NULL,
-  bio TEXT,
-  active INTEGER NOT NULL DEFAULT 1
-);
+  <div class="admin-shell" id="admin-shell" hidden>
+    <aside class="admin-sidebar">
+      <div class="admin-brand">
+        <span class="brand-mark">OTS</span>
+        <span>
+          <strong>MUSIC SCHOOL</strong>
+          <small>Academic operations</small>
+        </span>
+      </div>
 
-CREATE TABLE IF NOT EXISTS students (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  age_group TEXT NOT NULL,
-  instrument TEXT NOT NULL,
-  goal TEXT NOT NULL,
-  assigned_teacher_id INTEGER NOT NULL REFERENCES teachers(id),
-  current_week INTEGER NOT NULL DEFAULT 1,
-  course_start_date TEXT NOT NULL,
-  parent_name TEXT,
-  parent_email TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+      <nav class="admin-nav">
+        <button class="admin-nav-item is-active" data-admin-view="dashboard">
+          <span class="nav-symbol">⌂</span>
+          Dashboard
+        </button>
+        <button class="admin-nav-item" data-admin-view="students">
+          <span class="nav-symbol">◎</span>
+          Students
+        </button>
+        <button class="admin-nav-item" data-admin-view="sessions">
+          <span class="nav-symbol">S</span>
+          Sessions
+        </button>
+        <button class="admin-nav-item" data-admin-view="courses">
+          <span class="nav-symbol">C</span>
+          Course plans
+        </button>
+        <button class="admin-nav-item" data-admin-view="staff" id="staff-nav-item" hidden>
+          <span class="nav-symbol">+</span>
+          Staff
+        </button>
+        <button class="admin-nav-item" data-admin-view="reviews">
+          <span class="nav-symbol">▶</span>
+          Review queue
+          <span class="nav-count" id="nav-review-count">0</span>
+        </button>
+        <button class="admin-nav-item" data-admin-view="alerts">
+          <span class="nav-symbol">!</span>
+          Alerts
+          <span class="nav-count danger" id="nav-alert-count">0</span>
+        </button>
+        <button class="admin-nav-item" data-admin-view="account">
+          <span class="nav-symbol">A</span>
+          Account
+        </button>
+      </nav>
 
-CREATE TABLE IF NOT EXISTS student_accounts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id INTEGER NOT NULL UNIQUE REFERENCES students(id) ON DELETE CASCADE,
-  email TEXT NOT NULL UNIQUE,
-  email_verified_at TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+      <div class="admin-sidebar-footer">
+        <span class="online-dot"></span>
+        <div>
+          <strong>Backend connected</strong>
+          <small>SQLite operational database</small>
+        </div>
+      </div>
+    </aside>
 
-CREATE TABLE IF NOT EXISTS student_preferences (
-  student_id INTEGER PRIMARY KEY REFERENCES students(id) ON DELETE CASCADE,
-  morning_reminder INTEGER NOT NULL DEFAULT 1,
-  evening_reminder INTEGER NOT NULL DEFAULT 1,
-  parent_updates INTEGER NOT NULL DEFAULT 1,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+    <div class="admin-main-column">
+      <header class="admin-topbar">
+        <div>
+          <p class="eyebrow" id="admin-date-label">MONDAY, 15 JUNE</p>
+          <h2 id="admin-page-title">Academic overview</h2>
+        </div>
+        <div class="admin-user">
+          <div>
+            <strong id="admin-user-name">OTS Admin</strong>
+            <small id="admin-user-role">Super admin</small>
+          </div>
+          <span class="admin-avatar" id="admin-avatar">OA</span>
+          <button class="logout-button" id="logout-button">Sign out</button>
+        </div>
+      </header>
 
-CREATE TABLE IF NOT EXISTS otp_challenges (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_account_id INTEGER NOT NULL REFERENCES student_accounts(id) ON DELETE CASCADE,
-  session_id TEXT NOT NULL UNIQUE,
-  code_hash TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  attempts INTEGER NOT NULL DEFAULT 0,
-  max_attempts INTEGER NOT NULL DEFAULT 5,
-  consumed_at TEXT,
-  delivery_status TEXT NOT NULL DEFAULT 'pending',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+      <main class="admin-main">
+        <section class="admin-view is-active" id="admin-view-dashboard" data-title="Academic overview">
+          <div class="admin-page-intro">
+            <div>
+              <p class="eyebrow">STUDENT HEALTH</p>
+              <h1>Know who is progressing and who needs help.</h1>
+              <p>Scores combine practice consistency, attendance, skill improvement and application of teacher feedback.</p>
+            </div>
+            <button class="admin-button secondary" id="refresh-dashboard">Refresh data</button>
+          </div>
 
-CREATE TABLE IF NOT EXISTS auth_sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  token_hash TEXT NOT NULL UNIQUE,
-  principal_type TEXT NOT NULL CHECK (principal_type IN ('staff', 'student')),
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
-  role TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  revoked_at TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+          <div class="metric-grid">
+            <article class="metric-card">
+              <span class="metric-label">Active students</span>
+              <strong id="metric-active-students">0</strong>
+              <small>Across all 12-week courses</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Need attention</span>
+              <strong id="metric-attention-students">0</strong>
+              <small>Amber or red status</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Videos awaiting review</span>
+              <strong id="metric-pending-reviews">0</strong>
+              <small>Oldest reviews appear first</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Average student score</span>
+              <strong id="metric-average-score">0</strong>
+              <small>Weighted score out of 100</small>
+            </article>
+          </div>
 
-CREATE TABLE IF NOT EXISTS live_sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  teacher_id INTEGER NOT NULL REFERENCES teachers(id),
-  topic TEXT NOT NULL,
-  scheduled_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'scheduled',
-  duration_minutes INTEGER NOT NULL DEFAULT 45,
-  meeting_room TEXT,
-  notes TEXT,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+          <div class="overview-grid">
+            <section class="admin-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">PORTFOLIO STATUS</p>
+                  <h2>Risk distribution</h2>
+                </div>
+              </div>
+              <div class="distribution-list">
+                <div class="distribution-row">
+                  <span class="status-pill green">Green</span>
+                  <div class="distribution-track"><span class="green-fill" id="green-distribution"></span></div>
+                  <strong id="green-count">0</strong>
+                </div>
+                <div class="distribution-row">
+                  <span class="status-pill amber">Amber</span>
+                  <div class="distribution-track"><span class="amber-fill" id="amber-distribution"></span></div>
+                  <strong id="amber-count">0</strong>
+                </div>
+                <div class="distribution-row">
+                  <span class="status-pill red">Red</span>
+                  <div class="distribution-track"><span class="red-fill" id="red-distribution"></span></div>
+                  <strong id="red-count">0</strong>
+                </div>
+              </div>
+              <div class="score-formula">
+                <strong>Weighted student score</strong>
+                <span>Practice 35% · Attendance 25% · Skills 25% · Feedback application 15%</span>
+              </div>
+            </section>
 
-CREATE TABLE IF NOT EXISTS student_course_plans (
-  student_id INTEGER PRIMARY KEY REFERENCES students(id) ON DELETE CASCADE,
-  course_title TEXT NOT NULL,
-  total_weeks INTEGER NOT NULL DEFAULT 12,
-  practice_minutes INTEGER NOT NULL DEFAULT 7,
-  morning_required INTEGER NOT NULL DEFAULT 1,
-  evening_required INTEGER NOT NULL DEFAULT 1,
-  updated_by_user_id INTEGER REFERENCES users(id),
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+            <section class="admin-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">OPERATIONS</p>
+                  <h2>Service health</h2>
+                </div>
+              </div>
+              <div class="service-list">
+                <div><span>Open alerts</span><strong id="service-open-alerts">0</strong></div>
+                <div><span>Today's sessions</span><strong id="service-today-sessions">0</strong></div>
+                <div><span>Average review time</span><strong id="service-review-hours">0h</strong></div>
+              </div>
+            </section>
+          </div>
 
-CREATE TABLE IF NOT EXISTS student_course_weeks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  week_number INTEGER NOT NULL,
-  title TEXT NOT NULL,
-  focus TEXT NOT NULL,
-  milestone TEXT NOT NULL,
-  lessons_json TEXT NOT NULL DEFAULT '[]',
-  practice_instructions TEXT NOT NULL DEFAULT '',
-  UNIQUE(student_id, week_number)
-);
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">PRIORITY LIST</p>
+                <h2>Students needing attention</h2>
+              </div>
+              <button class="text-action" data-admin-view="students">View all students</button>
+            </div>
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Course</th>
+                    <th>Teacher</th>
+                    <th>Score</th>
+                    <th>Alerts</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="attention-students-body"></tbody>
+              </table>
+            </div>
+          </section>
 
-CREATE TABLE IF NOT EXISTS practice_submissions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  teacher_id INTEGER NOT NULL REFERENCES teachers(id),
-  course_week INTEGER NOT NULL,
-  period TEXT NOT NULL CHECK (period IN ('morning', 'evening')),
-  duration_seconds INTEGER NOT NULL,
-  file_name TEXT NOT NULL,
-  storage_key TEXT NOT NULL UNIQUE,
-  uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  review_status TEXT NOT NULL DEFAULT 'pending',
-  reviewed_at TEXT
-);
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">UPCOMING</p>
+                <h2>Live sessions</h2>
+              </div>
+            </div>
+            <div class="upcoming-session-grid" id="upcoming-session-grid"></div>
+          </section>
+        </section>
 
-CREATE TABLE IF NOT EXISTS teacher_reviews (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  submission_id INTEGER NOT NULL UNIQUE REFERENCES practice_submissions(id) ON DELETE CASCADE,
-  teacher_id INTEGER NOT NULL REFERENCES teachers(id),
-  positive_observation TEXT NOT NULL,
-  main_correction TEXT NOT NULL,
-  next_practice_focus TEXT NOT NULL,
-  requires_help_call INTEGER NOT NULL DEFAULT 0,
-  reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+        <section class="admin-view" id="admin-view-students" data-title="Student analysis">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">STUDENT 360</p>
+              <h1>Student analysis</h1>
+              <p>Filter the portfolio, compare score components and open a complete student record.</p>
+            </div>
+            <button class="admin-button primary" id="open-create-student">Add student</button>
+          </div>
 
-CREATE TABLE IF NOT EXISTS skill_ratings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  review_id INTEGER NOT NULL UNIQUE REFERENCES teacher_reviews(id) ON DELETE CASCADE,
-  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  rhythm INTEGER NOT NULL,
-  accuracy INTEGER NOT NULL,
-  technique INTEGER NOT NULL,
-  posture INTEGER NOT NULL,
-  musicality INTEGER NOT NULL,
-  confidence INTEGER NOT NULL,
-  feedback_application INTEGER NOT NULL,
-  rated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+          <section class="admin-panel filters-panel">
+            <label class="search-field">
+              <span>Search</span>
+              <input id="student-search" type="search" placeholder="Student, teacher or instrument">
+            </label>
+            <label>
+              Status
+              <select id="student-status-filter">
+                <option value="">All statuses</option>
+                <option value="green">Green</option>
+                <option value="amber">Amber</option>
+                <option value="red">Red</option>
+              </select>
+            </label>
+            <button class="admin-button secondary" id="apply-student-filters">Apply filters</button>
+          </section>
 
-CREATE TABLE IF NOT EXISTS help_calls (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  teacher_id INTEGER NOT NULL REFERENCES teachers(id),
-  topic TEXT NOT NULL,
-  scheduled_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'scheduled',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+          <section class="admin-panel">
+            <div class="table-wrap">
+              <table class="admin-table student-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Teacher</th>
+                    <th>Week</th>
+                    <th>Practice</th>
+                    <th>Attendance</th>
+                    <th>Skills</th>
+                    <th>Overall</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="students-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
 
-CREATE TABLE IF NOT EXISTS student_alerts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  severity TEXT NOT NULL,
-  title TEXT NOT NULL,
-  detail TEXT NOT NULL,
-  resolved INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  resolved_at TEXT
-);
+        <section class="admin-view" id="admin-view-staff" data-title="Staff access">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">SUPER ADMIN</p>
+              <h1>Admins and teachers</h1>
+              <p>Create separate staff accounts and control who can access the operations portal.</p>
+            </div>
+            <button class="admin-button primary" id="open-create-staff">Add staff member</button>
+          </div>
 
-CREATE INDEX IF NOT EXISTS idx_otp_account_created ON otp_challenges(student_account_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_auth_token ON auth_sessions(token_hash, revoked_at, expires_at);
-CREATE INDEX IF NOT EXISTS idx_practice_student_date ON practice_submissions(student_id, uploaded_at);
-CREATE INDEX IF NOT EXISTS idx_practice_review ON practice_submissions(review_status, uploaded_at);
-CREATE INDEX IF NOT EXISTS idx_alerts_open ON student_alerts(student_id, resolved);
-CREATE INDEX IF NOT EXISTS idx_course_weeks_student ON student_course_weeks(student_id, week_number);
-CREATE INDEX IF NOT EXISTS idx_sessions_teacher_date ON live_sessions(teacher_id, scheduled_at);
+          <section class="admin-panel">
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Staff member</th>
+                    <th>Role</th>
+                    <th>Instrument</th>
+                    <th>Students</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="staff-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="admin-view" id="admin-view-sessions" data-title="Live sessions">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">LIVE CLASSROOM</p>
+              <h1>Plan and update student sessions</h1>
+              <p>Admins can manage all sessions. Teachers can manage sessions for students assigned to them.</p>
+            </div>
+            <button class="admin-button primary" id="open-create-session">Add session</button>
+          </div>
+
+          <section class="admin-panel">
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Teacher</th>
+                    <th>Topic</th>
+                    <th>Date and time</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="sessions-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="admin-view" id="admin-view-courses" data-title="Student course plans">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">PERSONALISED LEARNING</p>
+              <h1>Course and practice plan</h1>
+              <p>Choose a student, then set their course length, daily practice requirement and weekly learning plan.</p>
+            </div>
+          </div>
+
+          <section class="admin-panel course-plan-panel">
+            <label class="course-student-picker">
+              Student
+              <select id="course-student-select"></select>
+            </label>
+            <form id="course-plan-form" class="course-plan-form">
+              <div class="student-create-grid">
+                <label>
+                  Course title
+                  <input id="course-title" required>
+                </label>
+                <label>
+                  Number of weeks
+                  <input id="course-total-weeks" type="number" min="1" max="24" required>
+                </label>
+                <label>
+                  Minimum practice minutes
+                  <input id="course-practice-minutes" type="number" min="1" max="60" required>
+                </label>
+                <div class="course-requirements">
+                  <label class="checkbox-row">
+                    <input id="course-morning-required" type="checkbox">
+                    <span>Morning practice required</span>
+                  </label>
+                  <label class="checkbox-row">
+                    <input id="course-evening-required" type="checkbox">
+                    <span>Evening practice required</span>
+                  </label>
+                </div>
+              </div>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">WEEKLY STRUCTURE</p>
+                  <h2>Student-specific course weeks</h2>
+                </div>
+              </div>
+              <div class="course-week-editor" id="course-week-editor"></div>
+              <p class="form-error" id="course-plan-error" hidden></p>
+              <button class="admin-button primary large" type="submit">Save student course plan</button>
+            </form>
+          </section>
+        </section>
+
+        <section class="admin-view" id="admin-view-reviews" data-title="Teacher review queue">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">TEACHER WORKFLOW</p>
+              <h1>Practice review queue</h1>
+              <p>Review the oldest submissions first, score skills and define the student's next practice focus.</p>
+            </div>
+            <span class="queue-sla">Target: within 12 hours</span>
+          </div>
+          <div class="review-queue" id="review-queue"></div>
+        </section>
+
+        <section class="admin-view" id="admin-view-alerts" data-title="Student alerts">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">INTERVENTIONS</p>
+              <h1>Student alerts</h1>
+              <p>Resolve operational alerts or open the student record for academic intervention.</p>
+            </div>
+          </div>
+          <div class="alert-list" id="alert-list"></div>
+        </section>
+
+        <section class="admin-view" id="admin-view-account" data-title="Account security">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">SECURITY</p>
+              <h1>Change your password</h1>
+              <p>Update the password for the staff account currently signed in.</p>
+            </div>
+          </div>
+          <section class="admin-panel account-panel">
+            <form id="change-password-form" class="stack-form">
+              <label>
+                Current password
+                <input id="current-password" type="password" autocomplete="current-password" required>
+              </label>
+              <label>
+                New password
+                <input id="new-password" type="password" minlength="8" autocomplete="new-password" required>
+              </label>
+              <label>
+                Confirm new password
+                <input id="confirm-new-password" type="password" minlength="8" autocomplete="new-password" required>
+              </label>
+              <p class="form-error" id="change-password-error" hidden></p>
+              <button class="admin-button primary large" type="submit">Change password</button>
+            </form>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="admin-modal" id="create-staff-modal">
+    <form class="modal-surface" id="create-staff-form">
+      <button class="modal-close" type="button" data-close-modal="create-staff-modal" aria-label="Close">X</button>
+      <p class="eyebrow">STAFF ACCESS</p>
+      <h2>Add an admin or teacher</h2>
+      <p class="modal-subtitle">Each staff member receives a separate email and password. Only Super Admin can manage these accounts.</p>
+
+      <div class="student-create-grid">
+        <label>
+          Full name
+          <input id="create-staff-name" required>
+        </label>
+        <label>
+          Email
+          <input id="create-staff-email" type="email" required>
+        </label>
+        <label>
+          Role
+          <select id="create-staff-role" required>
+            <option value="teacher">Teacher</option>
+            <option value="academic_head">Academic head</option>
+            <option value="operations">Operations admin</option>
+            <option value="super_admin">Super admin</option>
+          </select>
+        </label>
+        <label id="create-staff-instrument-row">
+          Instrument
+          <select id="create-staff-instrument">
+            <option>Guitar</option>
+            <option>Keyboard</option>
+            <option>Vocals</option>
+            <option>Violin</option>
+            <option>Drums</option>
+          </select>
+        </label>
+        <label class="full-width">
+          Temporary password
+          <input id="create-staff-password" type="password" minlength="8" autocomplete="new-password" required>
+        </label>
+      </div>
+      <p class="form-error" id="create-staff-error" hidden></p>
+      <button class="admin-button primary large" type="submit">Create staff account</button>
+    </form>
+  </dialog>
+
+  <dialog class="admin-modal" id="session-modal">
+    <form class="modal-surface" id="session-form">
+      <button class="modal-close" type="button" data-close-modal="session-modal" aria-label="Close">X</button>
+      <p class="eyebrow">LIVE SESSION</p>
+      <h2 id="session-modal-title">Add a live session</h2>
+      <input id="session-id" type="hidden">
+      <div class="student-create-grid">
+        <label>
+          Student
+          <select id="session-student" required></select>
+        </label>
+        <label>
+          Date and time
+          <input id="session-scheduled-at" type="datetime-local" required>
+        </label>
+        <label class="full-width">
+          Session topic
+          <input id="session-topic" required>
+        </label>
+        <label>
+          Duration in minutes
+          <input id="session-duration" type="number" min="15" max="180" value="45" required>
+        </label>
+        <label>
+          Status
+          <select id="session-status">
+            <option value="scheduled">Scheduled</option>
+            <option value="attended">Attended</option>
+            <option value="missed">Missed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <label class="full-width">
+          Classroom room name
+          <input id="session-room" placeholder="Created automatically when left blank">
+        </label>
+        <label class="full-width">
+          Teacher notes
+          <textarea id="session-notes" rows="3"></textarea>
+        </label>
+      </div>
+      <p class="form-error" id="session-error" hidden></p>
+      <button class="admin-button primary large" type="submit">Save session</button>
+    </form>
+  </dialog>
+
+  <dialog class="admin-modal" id="reset-password-modal">
+    <form class="modal-surface" id="reset-password-form">
+      <button class="modal-close" type="button" data-close-modal="reset-password-modal" aria-label="Close">X</button>
+      <p class="eyebrow">SUPER ADMIN</p>
+      <h2>Reset staff password</h2>
+      <p class="modal-subtitle" id="reset-password-member"></p>
+      <input id="reset-password-staff-id" type="hidden">
+      <label>
+        New temporary password
+        <input id="reset-staff-password" type="password" minlength="8" autocomplete="new-password" required>
+      </label>
+      <p class="form-error" id="reset-password-error" hidden></p>
+      <button class="admin-button primary large" type="submit">Reset password</button>
+    </form>
+  </dialog>
+
+  <dialog class="admin-modal student-modal" id="student-modal">
+    <div class="modal-surface">
+      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">×</button>
+      <div id="student-modal-content"></div>
+    </div>
+  </dialog>
+
+  <dialog class="admin-modal review-modal" id="review-modal">
+    <form class="modal-surface review-form" id="review-form">
+      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">×</button>
+      <p class="eyebrow">PRACTICE REVIEW</p>
+      <h2 id="review-modal-title">Review submission</h2>
+      <p class="modal-subtitle" id="review-modal-subtitle"></p>
+      <input id="review-submission-id" type="hidden">
+
+      <div class="review-video-placeholder">
+        <video id="review-video-player" controls playsinline hidden></video>
+        <span>▶</span>
+        <div>
+          <strong id="review-file-name">practice-video.mp4</strong>
+          <small id="review-video-message">Loading private practice video...</small>
+        </div>
+      </div>
+
+      <div class="review-text-grid">
+        <label>
+          Positive observation
+          <textarea id="review-positive" rows="3" required>Good focused practice and improved control.</textarea>
+        </label>
+        <label>
+          Main correction
+          <textarea id="review-correction" rows="3" required>Slow the difficult transition and remove unnecessary tension.</textarea>
+        </label>
+      </div>
+
+      <label>
+        Next practice focus
+        <textarea id="review-next-focus" rows="2" required>Repeat the assigned exercise three times before the next upload.</textarea>
+      </label>
+
+      <div class="skill-rating-grid" id="skill-rating-grid">
+        <label>Rhythm <input type="range" min="1" max="5" value="3" data-rating="rhythm"><output>3</output></label>
+        <label>Accuracy <input type="range" min="1" max="5" value="3" data-rating="accuracy"><output>3</output></label>
+        <label>Technique <input type="range" min="1" max="5" value="3" data-rating="technique"><output>3</output></label>
+        <label>Posture <input type="range" min="1" max="5" value="3" data-rating="posture"><output>3</output></label>
+        <label>Musicality <input type="range" min="1" max="5" value="3" data-rating="musicality"><output>3</output></label>
+        <label>Confidence <input type="range" min="1" max="5" value="3" data-rating="confidence"><output>3</output></label>
+        <label>Feedback applied <input type="range" min="1" max="5" value="3" data-rating="feedback_application"><output>3</output></label>
+      </div>
+
+      <label class="checkbox-row">
+        <input id="review-help-call" type="checkbox">
+        <span>Recommend an extra teacher help call</span>
+      </label>
+
+      <button class="admin-button primary large" type="submit">Submit review and update student score</button>
+    </form>
+  </dialog>
+
+  <dialog class="admin-modal" id="create-student-modal">
+    <form class="modal-surface" id="create-student-form">
+      <button class="modal-close" type="button" data-close-modal="create-student-modal" aria-label="Close">X</button>
+      <p class="eyebrow">NEW ENROLLMENT</p>
+      <h2>Add a student account</h2>
+      <p class="modal-subtitle">The learner will use this email address to receive a one-time login code.</p>
+
+      <div class="student-create-grid">
+        <label>
+          Student name
+          <input id="create-student-name" required>
+        </label>
+        <label>
+          Login email
+          <input id="create-student-email" type="email" required>
+        </label>
+        <label>
+          Age group
+          <select id="create-student-age" required>
+            <option value="8-12">8-12</option>
+            <option value="13-17">13-17</option>
+            <option value="18+">18+</option>
+          </select>
+        </label>
+        <label>
+          Instrument
+          <select id="create-student-instrument" required>
+            <option>Guitar</option>
+            <option>Keyboard</option>
+          </select>
+        </label>
+        <label>
+          Assigned teacher
+          <select id="create-student-teacher" required></select>
+        </label>
+        <label>
+          Course start
+          <input id="create-student-start" type="date" required>
+        </label>
+        <label class="full-width">
+          Learning goal
+          <input id="create-student-goal" value="Play complete songs confidently" required>
+        </label>
+        <label>
+          Parent name
+          <input id="create-parent-name">
+        </label>
+        <label>
+          Parent email
+          <input id="create-parent-email" type="email">
+        </label>
+      </div>
+      <p class="form-error" id="create-student-error" hidden></p>
+      <button class="admin-button primary large" type="submit">Create student and login account</button>
+    </form>
+  </dialog>
+
+  <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
+  <script src="/admin.js"></script>
+</body>
+</html>
