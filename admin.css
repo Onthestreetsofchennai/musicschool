@@ -1,11 +1,11 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111426">
   <title>OTS Admin | Student Analysis</title>
-  <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="../admin.css">
 </head>
 <body>
   <div class="admin-login" id="admin-login">
@@ -53,11 +53,11 @@
 
       <nav class="admin-nav">
         <button class="admin-nav-item is-active" data-admin-view="dashboard">
-          <span class="nav-symbol">⌂</span>
+          <span class="nav-symbol">âŒ‚</span>
           Dashboard
         </button>
         <button class="admin-nav-item" data-admin-view="students">
-          <span class="nav-symbol">◎</span>
+          <span class="nav-symbol">â—Ž</span>
           Students
         </button>
         <button class="admin-nav-item" data-admin-view="sessions">
@@ -73,7 +73,7 @@
           Staff
         </button>
         <button class="admin-nav-item" data-admin-view="reviews">
-          <span class="nav-symbol">▶</span>
+          <span class="nav-symbol">â–¶</span>
           Review queue
           <span class="nav-count" id="nav-review-count">0</span>
         </button>
@@ -174,7 +174,7 @@
               </div>
               <div class="score-formula">
                 <strong>Weighted student score</strong>
-                <span>Practice 35% · Attendance 25% · Skills 25% · Feedback application 15%</span>
+                <span>Practice 35% Â· Attendance 25% Â· Skills 25% Â· Feedback application 15%</span>
               </div>
             </section>
 
@@ -550,14 +550,14 @@
 
   <dialog class="admin-modal student-modal" id="student-modal">
     <div class="modal-surface">
-      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">×</button>
+      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">Ã—</button>
       <div id="student-modal-content"></div>
     </div>
   </dialog>
 
   <dialog class="admin-modal review-modal" id="review-modal">
     <form class="modal-surface review-form" id="review-form">
-      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">×</button>
+      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">Ã—</button>
       <p class="eyebrow">PRACTICE REVIEW</p>
       <h2 id="review-modal-title">Review submission</h2>
       <p class="modal-subtitle" id="review-modal-subtitle"></p>
@@ -565,7 +565,7 @@
 
       <div class="review-video-placeholder">
         <video id="review-video-player" controls playsinline hidden></video>
-        <span>▶</span>
+        <span>â–¶</span>
         <div>
           <strong id="review-file-name">practice-video.mp4</strong>
           <small id="review-video-message">Loading private practice video...</small>
@@ -665,6 +665,7 @@
   </dialog>
 
   <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
-  <script src="/admin.js"></script>
+  <script src="../admin.js"></script>
 </body>
 </html>
+

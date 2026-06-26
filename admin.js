@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111426">
   <title>OTS Admin | Student Analysis</title>
-  <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="./admin.css">
 </head>
 <body>
   <div class="admin-login" id="admin-login">
@@ -665,6 +665,6 @@
   </dialog>
 
   <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
-  <script src="/admin.js"></script>
+  <script src="./admin.js"></script>
 </body>
 </html>
