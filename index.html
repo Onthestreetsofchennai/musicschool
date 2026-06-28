@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#111426">
   <meta name="description" content="MUSIC SCHOOL OTS guided 12-week music learning app">
   <title>MUSIC SCHOOL OTS</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -57,12 +57,12 @@
       <span class="practice-gate-icon">7</span>
       <p class="eyebrow">DAILY PRACTICE REQUIRED</p>
       <h1 id="practice-gate-title">Upload your morning practice</h1>
-      <p id="practice-gate-message">Your course stays locked until today's required 7-minute practice is submitted.</p>
+      <p id="practice-gate-message">Your course path opens after today's required practice is submitted. Home, Check-in, Feedback and Profile stay open.</p>
       <div class="practice-gate-actions">
         <button class="button button-primary button-large" id="practice-gate-upload">Upload practice now</button>
         <button class="button button-secondary" id="practice-gate-snooze">Snooze reminder for 10 minutes</button>
       </div>
-      <small>Snoozing hides this reminder, but Course, Feedback, Profile and Classroom remain locked.</small>
+      <small>Snoozing hides this reminder. The Course tab stays paused until practice is submitted.</small>
     </section>
   </div>
 
@@ -131,20 +131,20 @@
         <section class="view is-active" id="view-home" data-title="Your learning dashboard">
           <div class="hero-card">
             <div class="hero-content">
-              <p class="eyebrow light">12-WEEK <span id="hero-instrument">GUITAR</span> COURSE</p>
-              <h1>Week <span id="hero-week">3</span> of 12</h1>
-              <p id="hero-goal">Your current focus is rhythm, clean chord shapes, and consistency.</p>
+              <p class="eyebrow light">GUITAR CRASH COURSE</p>
+              <h1>Week <span id="hero-week">3</span> performer path</h1>
+              <p id="hero-goal">Everyone is aiming to become a performer. See where you stand, then move one practice pod forward.</p>
               <div class="hero-progress-row">
                 <div class="progress-track progress-track-dark">
                   <span id="hero-progress-bar"></span>
                 </div>
                 <strong id="hero-progress-text">25%</strong>
               </div>
-              <button class="button button-light" data-view="course">Continue course</button>
+              <button class="button button-light" data-view="course">Open performer path</button>
             </div>
             <div class="hero-orbit" aria-hidden="true">
               <span class="orbit-ring"></span>
-              <span class="orbit-core">W<span id="orbit-week">3</span></span>
+              <span class="orbit-core">G<span id="orbit-week">3</span></span>
             </div>
           </div>
 
@@ -165,6 +165,91 @@
               <small>Average response: 6 hours</small>
             </article>
           </div>
+
+          <section class="motivation-grid">
+            <article class="quest-card clay-card" id="first-login-quest">
+              <span class="quest-kicker">PERFORMER JOURNEY</span>
+              <h2 id="welcome-quest-title">You chose guitar. That is the first stage win.</h2>
+              <p id="welcome-quest-copy">Stay tiny and consistent. Every practice video is proof that you are moving closer to stage confidence.</p>
+            </article>
+
+            <article class="quest-card clay-card">
+              <span class="quest-kicker">TODAY'S QUEST</span>
+              <h2>Unlock today's riff gate</h2>
+              <div class="quest-pods" id="daily-quest-pods">
+                <div class="quest-pod" data-quest-pod="morning">
+                  <strong>Morning riff pod</strong>
+                  <span id="morning-quest-status">Waiting for practice</span>
+                </div>
+                <div class="quest-pod" data-quest-pod="evening">
+                  <strong>Evening rhythm pod</strong>
+                  <span id="evening-quest-status">Waiting for practice</span>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section class="performer-journey-panel">
+            <div class="journey-copy">
+              <p class="journey-kicker">GUITAR CRASH COURSE JOURNEY</p>
+              <h2>Everyone is aiming to become a performer.</h2>
+              <p>Do not compete with others. See where you stand, celebrate the group progress, and keep moving one practice pod at a time.</p>
+            </div>
+            <div class="journey-experience">
+              <section class="speedometer-card" aria-label="Weekly activity speedometer">
+                <div class="journey-stats journey-speed-stats">
+                  <article>
+                    <strong id="group-active-count">10</strong>
+                    <span>students moving</span>
+                  </article>
+                  <article>
+                    <strong id="your-journey-rank">#1</strong>
+                    <span>your current stand</span>
+                  </article>
+                  <article>
+                    <strong id="group-pods-count">0</strong>
+                    <span>pods this week</span>
+                  </article>
+                </div>
+                <div class="speedometer-gauge">
+                  <svg viewBox="0 0 240 140" role="img" aria-label="This week activity progress">
+                    <path class="gauge-track" pathLength="100" d="M28 116 A92 92 0 0 1 212 116"></path>
+                    <path class="gauge-fill" id="weekly-activity-arc" pathLength="100" d="M28 116 A92 92 0 0 1 212 116"></path>
+                  </svg>
+                  <div class="gauge-center">
+                    <strong><span id="weekly-activity-count">0</span>/<span id="weekly-activity-target">4</span></strong>
+                    <span>This week activity</span>
+                  </div>
+                </div>
+                <h3 id="weekly-activity-message">Start with one practice pod today.</h3>
+                <div class="activity-mini-track" id="activity-mini-track" aria-label="Weekly milestone steps"></div>
+              </section>
+
+              <section class="space-roadmap-card" aria-label="Performer roadmap">
+                <div class="roadmap-title-row">
+                  <div>
+                    <span>Performer Roadmap</span>
+                    <strong>Move your badge toward the final stage</strong>
+                  </div>
+                  <button class="journey-cta" id="view-leaderboard-button" type="button">View leaderboard</button>
+                </div>
+                <div class="performer-map space-roadmap" id="performer-map"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="hall-panel">
+            <div class="hall-heading">
+              <div>
+                <p class="journey-kicker">GUITAR HALL OF FAME</p>
+                <h2>Recent performers from your batch</h2>
+              </div>
+              <span id="hall-week-copy">Week progress</span>
+            </div>
+            <div class="fame-strip" id="hall-of-fame-list"></div>
+            <div class="weekly-progress-list" id="weekly-progress-list"></div>
+            <div class="leaderboard-list" id="leaderboard-list"></div>
+          </section>
 
           <div class="dashboard-grid">
             <section class="panel">
@@ -212,7 +297,7 @@
                 <span class="completion-ring" id="daily-ring">1/2</span>
               </div>
               <div class="daily-list">
-                <button class="daily-item is-complete" data-view="checkin">
+                <button class="daily-item is-complete" data-view="checkin" id="home-morning-item">
                   <span class="check-icon">✓</span>
                   <span>
                     <strong>Morning practice</strong>
@@ -313,10 +398,13 @@
                 <strong id="morning-file-label">morning-practice.mp4</strong>
                 <small id="morning-upload-time">Uploaded at 7:18 AM</small>
               </div>
-              <label class="button button-secondary upload-label">
-                Replace video
-                <input type="file" accept="video/*" data-upload-input="morning" hidden>
-              </label>
+              <div class="practice-action-row">
+                <button class="button button-primary" type="button" data-record-practice="morning">Record video</button>
+                <label class="button button-secondary upload-label">
+                  Upload video
+                  <input type="file" accept="video/*" data-upload-input="morning" hidden>
+                </label>
+              </div>
               <button class="button button-primary submit-upload" data-submit-upload="morning" hidden>Submit morning video</button>
               <button class="text-button remove-pending-upload" data-remove-upload="morning" hidden>Remove pending upload</button>
             </article>
@@ -331,13 +419,16 @@
               </div>
               <div class="video-preview is-empty" id="evening-preview">
                 <span class="video-placeholder-icon">+</span>
-                <strong id="evening-file-label">Record or choose a video</strong>
+                <strong id="evening-file-label">Record or upload a video</strong>
                 <small id="evening-upload-time">Due by 8:00 PM</small>
               </div>
-              <label class="button button-secondary upload-label">
-                Choose video
-                <input type="file" accept="video/*" data-upload-input="evening" hidden>
-              </label>
+              <div class="practice-action-row">
+                <button class="button button-primary" type="button" data-record-practice="evening">Record video</button>
+                <label class="button button-secondary upload-label">
+                  Upload video
+                  <input type="file" accept="video/*" data-upload-input="evening" hidden>
+                </label>
+              </div>
               <button class="button button-primary submit-upload" data-submit-upload="evening" hidden>Submit evening video</button>
               <button class="text-button remove-pending-upload" data-remove-upload="evening" hidden>Remove pending upload</button>
             </article>
@@ -499,6 +590,37 @@
     </form>
   </dialog>
 
+  <dialog class="modal" id="welcome-modal">
+    <div class="modal-card celebration-card">
+      <p class="eyebrow">FIRST STEP UNLOCKED</p>
+      <h2 id="welcome-modal-title">Congrats on choosing to learn a new skill.</h2>
+      <p>You can definitely do this. Start with one small practice pod today, and let the streak build from there.</p>
+      <button class="button button-primary button-large" id="welcome-modal-close" type="button">Start my journey</button>
+    </div>
+  </dialog>
+
+  <dialog class="modal recorder-modal" id="practice-recorder-modal">
+    <div class="modal-card recorder-card">
+      <button class="modal-close" id="close-practice-recorder" type="button" aria-label="Close">X</button>
+      <p class="eyebrow" id="recorder-period-label">MORNING PRACTICE</p>
+      <h2>Record inside the app</h2>
+      <p id="recorder-helper">Allow camera and microphone, then record your practice video.</p>
+      <div class="recorder-stage">
+        <video id="practice-recorder-preview" autoplay muted playsinline></video>
+        <div class="recorder-empty" id="practice-recorder-empty">
+          <strong>Camera preview</strong>
+          <small>Recording starts only after you press Start.</small>
+        </div>
+      </div>
+      <div class="recorder-timer" id="practice-recorder-timer">00:00</div>
+      <div class="recorder-actions">
+        <button class="button button-primary" id="start-practice-recording" type="button">Start recording</button>
+        <button class="button button-secondary" id="stop-practice-recording" type="button" disabled>Stop</button>
+        <button class="button button-primary" id="use-practice-recording" type="button" disabled>Use this video</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="classroom-modal" id="classroom-modal">
     <div class="classroom-shell">
       <header class="classroom-header">
@@ -528,6 +650,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="./app.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

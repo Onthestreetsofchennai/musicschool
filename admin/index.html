@@ -1,11 +1,11 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111426">
   <title>OTS Admin | Student Analysis</title>
-  <link rel="stylesheet" href="../admin.css">
+  <link rel="stylesheet" href="/admin.css">
 </head>
 <body>
   <div class="admin-login" id="admin-login">
@@ -53,19 +53,27 @@
 
       <nav class="admin-nav">
         <button class="admin-nav-item is-active" data-admin-view="dashboard">
-          <span class="nav-symbol">âŒ‚</span>
+          <span class="nav-symbol">H</span>
           Dashboard
         </button>
         <button class="admin-nav-item" data-admin-view="students">
-          <span class="nav-symbol">â—Ž</span>
+          <span class="nav-symbol">S</span>
           Students
+        </button>
+        <button class="admin-nav-item" data-admin-view="sessions">
+          <span class="nav-symbol">L</span>
+          Sessions
+        </button>
+        <button class="admin-nav-item" data-admin-view="courses">
+          <span class="nav-symbol">C</span>
+          Course plans
         </button>
         <button class="admin-nav-item" data-admin-view="staff" id="staff-nav-item" hidden>
           <span class="nav-symbol">+</span>
           Staff
         </button>
         <button class="admin-nav-item" data-admin-view="reviews">
-          <span class="nav-symbol">â–¶</span>
+          <span class="nav-symbol">R</span>
           Review queue
           <span class="nav-count" id="nav-review-count">0</span>
         </button>
@@ -73,6 +81,10 @@
           <span class="nav-symbol">!</span>
           Alerts
           <span class="nav-count danger" id="nav-alert-count">0</span>
+        </button>
+        <button class="admin-nav-item" data-admin-view="account">
+          <span class="nav-symbol">A</span>
+          Account
         </button>
       </nav>
 
@@ -162,7 +174,7 @@
               </div>
               <div class="score-formula">
                 <strong>Weighted student score</strong>
-                <span>Practice 35% Â· Attendance 25% Â· Skills 25% Â· Feedback application 15%</span>
+                <span>Practice 35% / Attendance 25% / Skills 25% / Feedback application 15%</span>
               </div>
             </section>
 
@@ -294,6 +306,87 @@
           </section>
         </section>
 
+        <section class="admin-view" id="admin-view-sessions" data-title="Live sessions">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">LIVE CLASSROOM</p>
+              <h1>Plan and update student sessions</h1>
+              <p>Admins can manage all sessions. Teachers can manage sessions for students assigned to them.</p>
+            </div>
+            <button class="admin-button primary" id="open-create-session">Add session</button>
+          </div>
+
+          <section class="admin-panel">
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Teacher</th>
+                    <th>Topic</th>
+                    <th>Date and time</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="sessions-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="admin-view" id="admin-view-courses" data-title="Student course plans">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">PERSONALISED LEARNING</p>
+              <h1>Course and practice plan</h1>
+              <p>Choose a student, then set their course length, daily practice requirement and weekly learning plan.</p>
+            </div>
+          </div>
+
+          <section class="admin-panel course-plan-panel">
+            <label class="course-student-picker">
+              Student
+              <select id="course-student-select"></select>
+            </label>
+            <form id="course-plan-form" class="course-plan-form">
+              <div class="student-create-grid">
+                <label>
+                  Course title
+                  <input id="course-title" required>
+                </label>
+                <label>
+                  Number of weeks
+                  <input id="course-total-weeks" type="number" min="1" max="24" required>
+                </label>
+                <label>
+                  Minimum practice minutes
+                  <input id="course-practice-minutes" type="number" min="1" max="60" required>
+                </label>
+                <div class="course-requirements">
+                  <label class="checkbox-row">
+                    <input id="course-morning-required" type="checkbox">
+                    <span>Morning practice required</span>
+                  </label>
+                  <label class="checkbox-row">
+                    <input id="course-evening-required" type="checkbox">
+                    <span>Evening practice required</span>
+                  </label>
+                </div>
+              </div>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">WEEKLY STRUCTURE</p>
+                  <h2>Student-specific course weeks</h2>
+                </div>
+              </div>
+              <div class="course-week-editor" id="course-week-editor"></div>
+              <p class="form-error" id="course-plan-error" hidden></p>
+              <button class="admin-button primary large" type="submit">Save student course plan</button>
+            </form>
+          </section>
+        </section>
+
         <section class="admin-view" id="admin-view-reviews" data-title="Teacher review queue">
           <div class="admin-page-intro compact">
             <div>
@@ -315,6 +408,34 @@
             </div>
           </div>
           <div class="alert-list" id="alert-list"></div>
+        </section>
+
+        <section class="admin-view" id="admin-view-account" data-title="Account security">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">SECURITY</p>
+              <h1>Change your password</h1>
+              <p>Update the password for the staff account currently signed in.</p>
+            </div>
+          </div>
+          <section class="admin-panel account-panel">
+            <form id="change-password-form" class="stack-form">
+              <label>
+                Current password
+                <input id="current-password" type="password" autocomplete="current-password" required>
+              </label>
+              <label>
+                New password
+                <input id="new-password" type="password" minlength="8" autocomplete="new-password" required>
+              </label>
+              <label>
+                Confirm new password
+                <input id="confirm-new-password" type="password" minlength="8" autocomplete="new-password" required>
+              </label>
+              <p class="form-error" id="change-password-error" hidden></p>
+              <button class="admin-button primary large" type="submit">Change password</button>
+            </form>
+          </section>
         </section>
       </main>
     </div>
@@ -365,16 +486,78 @@
     </form>
   </dialog>
 
+  <dialog class="admin-modal" id="session-modal">
+    <form class="modal-surface" id="session-form">
+      <button class="modal-close" type="button" data-close-modal="session-modal" aria-label="Close">X</button>
+      <p class="eyebrow">LIVE SESSION</p>
+      <h2 id="session-modal-title">Add a live session</h2>
+      <input id="session-id" type="hidden">
+      <div class="student-create-grid">
+        <label>
+          Student
+          <select id="session-student" required></select>
+        </label>
+        <label>
+          Date and time
+          <input id="session-scheduled-at" type="datetime-local" required>
+        </label>
+        <label class="full-width">
+          Session topic
+          <input id="session-topic" required>
+        </label>
+        <label>
+          Duration in minutes
+          <input id="session-duration" type="number" min="15" max="180" value="45" required>
+        </label>
+        <label>
+          Status
+          <select id="session-status">
+            <option value="scheduled">Scheduled</option>
+            <option value="attended">Attended</option>
+            <option value="missed">Missed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <label class="full-width">
+          Classroom room name
+          <input id="session-room" placeholder="Created automatically when left blank">
+        </label>
+        <label class="full-width">
+          Teacher notes
+          <textarea id="session-notes" rows="3"></textarea>
+        </label>
+      </div>
+      <p class="form-error" id="session-error" hidden></p>
+      <button class="admin-button primary large" type="submit">Save session</button>
+    </form>
+  </dialog>
+
+  <dialog class="admin-modal" id="reset-password-modal">
+    <form class="modal-surface" id="reset-password-form">
+      <button class="modal-close" type="button" data-close-modal="reset-password-modal" aria-label="Close">X</button>
+      <p class="eyebrow">SUPER ADMIN</p>
+      <h2>Reset staff password</h2>
+      <p class="modal-subtitle" id="reset-password-member"></p>
+      <input id="reset-password-staff-id" type="hidden">
+      <label>
+        New temporary password
+        <input id="reset-staff-password" type="password" minlength="8" autocomplete="new-password" required>
+      </label>
+      <p class="form-error" id="reset-password-error" hidden></p>
+      <button class="admin-button primary large" type="submit">Reset password</button>
+    </form>
+  </dialog>
+
   <dialog class="admin-modal student-modal" id="student-modal">
     <div class="modal-surface">
-      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">Ã—</button>
+      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">X</button>
       <div id="student-modal-content"></div>
     </div>
   </dialog>
 
   <dialog class="admin-modal review-modal" id="review-modal">
     <form class="modal-surface review-form" id="review-form">
-      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">Ã—</button>
+      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">X</button>
       <p class="eyebrow">PRACTICE REVIEW</p>
       <h2 id="review-modal-title">Review submission</h2>
       <p class="modal-subtitle" id="review-modal-subtitle"></p>
@@ -382,7 +565,7 @@
 
       <div class="review-video-placeholder">
         <video id="review-video-player" controls playsinline hidden></video>
-        <span>â–¶</span>
+        <span>Play</span>
         <div>
           <strong id="review-file-name">practice-video.mp4</strong>
           <small id="review-video-message">Loading private practice video...</small>
@@ -482,7 +665,6 @@
   </dialog>
 
   <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
-  <script src="../admin.js"></script>
+  <script src="/admin.js"></script>
 </body>
 </html>
-

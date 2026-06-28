@@ -1,5 +1,6 @@
 const STORAGE_KEY = "musicSchoolOTSStateV1";
 const STUDENT_TOKEN_KEY = "otsStudentToken";
+const WELCOME_SEEN_PREFIX = "otsWelcomeSeen:";
 const API_ORIGIN = "https://music-school-ots.sharoncornerstone56.workers.dev";
 
 const courseWeeks = [
@@ -133,7 +134,8 @@ const defaultState = {
   },
   upcomingSessions: [],
   recentSubmissions: [],
-  helpCall: null
+  helpCall: null,
+  leaderboard: []
 };
 
 const feedbackItems = [
@@ -180,6 +182,15 @@ let backendConnected = false;
 let classroomStream = null;
 let classroomMicEnabled = true;
 let classroomCameraEnabled = true;
+let recorderStream = null;
+let practiceRecorder = null;
+let recorderChunks = [];
+let recorderPeriod = null;
+let recorderStartedAt = 0;
+let recorderTimerId = 0;
+let recordedPracticeBlob = null;
+let recordedPracticeSeconds = 0;
+let recordedPracticeUrl = "";
 
 async function apiRequest(path, options = {}) {
   const headers = {
@@ -268,6 +279,7 @@ async function syncStudentFromBackend() {
     } : structuredClone(defaultState.coursePlan);
     state.upcomingSessions = data.upcomingSessions || [];
     state.recentSubmissions = data.recentSubmissions || [];
+    state.leaderboard = data.leaderboard || [];
     state.checkins = {
       morning: { status: "pending", fileName: "", time: "" },
       evening: { status: "pending", fileName: "", time: "" }
@@ -302,7 +314,6 @@ async function syncStudentFromBackend() {
 
     saveState();
     renderAll();
-    if (state.practiceGate.locked) navigate("checkin", true);
     setAuthVisible(false);
   } catch (error) {
     backendConnected = false;
@@ -326,7 +337,8 @@ function loadState() {
       profile: { ...defaultState.profile, ...saved.profile },
       checkins: { ...defaultState.checkins, ...saved.checkins },
       settings: { ...defaultState.settings, ...saved.settings },
-      coursePlan: { ...defaultState.coursePlan, ...saved.coursePlan }
+      coursePlan: { ...defaultState.coursePlan, ...saved.coursePlan },
+      leaderboard: saved.leaderboard || defaultState.leaderboard
     } : structuredClone(defaultState);
   } catch {
     return structuredClone(defaultState);
@@ -353,10 +365,24 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
 }
 
+function welcomeKey(email) {
+  return `${WELCOME_SEEN_PREFIX}${String(email || "").toLowerCase()}`;
+}
+
+function showFirstLoginCelebration(studentName, email) {
+  const key = welcomeKey(email);
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, "1");
+  const firstName = (studentName || "Student").trim().split(/\s+/)[0] || "Student";
+  document.querySelector("#welcome-modal-title").textContent =
+    `${firstName}, congrats on choosing to learn a new skill.`;
+  document.querySelector("#welcome-modal").showModal();
+}
+
 function navigate(viewName, bypassGate = false) {
-  if (!bypassGate && state.practiceGate.locked && viewName !== "checkin") {
+  if (!bypassGate && state.practiceGate.locked && viewName === "course") {
     renderPracticeGate(true);
-    showToast(state.practiceGate.message);
+    showToast("Submit today's practice video to unlock the Course path.");
     return;
   }
   document.querySelectorAll(".view").forEach((view) => {
@@ -377,7 +403,7 @@ function renderPracticeGate(forceVisible = false) {
   const appShell = document.querySelector("#app-shell");
   const snoozedUntil = Number(sessionStorage.getItem("otsPracticeGateSnoozedUntil") || 0);
   const snoozed = snoozedUntil > Date.now();
-  const visible = state.practiceGate.locked && (forceVisible || !snoozed);
+  const visible = state.practiceGate.locked && forceVisible && !snoozed;
   gate.hidden = !visible;
   appShell.classList.toggle("is-practice-locked", state.practiceGate.locked);
   if (!state.practiceGate.locked) sessionStorage.removeItem("otsPracticeGateSnoozedUntil");
@@ -386,7 +412,7 @@ function renderPracticeGate(forceVisible = false) {
   document.querySelector(".practice-gate-icon").textContent = Math.round(state.practiceGate.minDurationSeconds / 60);
   document.querySelector("#practice-gate-title").textContent = `Upload your ${periodLabel} practice`;
   document.querySelector("#practice-gate-message").textContent = state.practiceGate.message ||
-    `Upload at least ${Math.round(state.practiceGate.minDurationSeconds / 60)} minutes to unlock the app.`;
+    `Upload at least ${Math.round(state.practiceGate.minDurationSeconds / 60)} minutes to unlock the Course tab.`;
 }
 
 function calculateProgress() {
@@ -438,7 +464,8 @@ function renderHome() {
   ].filter(Boolean);
   const submittedCount = requiredPeriods.filter((period) => ["submitted", "reviewed"].includes(state.checkins[period].status)).length;
 
-  document.querySelector("#hero-instrument").textContent = state.profile.instrument.toUpperCase();
+  const heroInstrument = document.querySelector("#hero-instrument");
+  if (heroInstrument) heroInstrument.textContent = state.profile.instrument.toUpperCase();
   document.querySelector("#hero-week").textContent = state.currentWeek;
   document.querySelector("#orbit-week").textContent = state.currentWeek;
   document.querySelector("#hero-progress-text").textContent = `${progress}%`;
@@ -454,8 +481,11 @@ function renderHome() {
     : "Not required in your plan";
   document.querySelector("#daily-ring").textContent = `${submittedCount}/${requiredPeriods.length}`;
 
+  const morningItem = document.querySelector("#home-morning-item");
   const eveningItem = document.querySelector("#home-evening-item");
+  morningItem.classList.toggle("is-complete", morningSubmitted);
   eveningItem.classList.toggle("is-complete", eveningSubmitted);
+  morningItem.querySelector(".check-icon").textContent = morningSubmitted ? "✓" : "1";
   const sessionList = document.querySelector(".session-list");
   const teacher = teacherIdentity();
   sessionList.innerHTML = state.upcomingSessions.length
@@ -478,6 +508,142 @@ function renderHome() {
     }).join("")
     : '<p class="empty-state">No upcoming live sessions.</p>';
   eveningItem.querySelector(".check-icon").textContent = eveningSubmitted ? "✓" : "2";
+  renderGamification();
+}
+
+function renderGamification() {
+  const firstName = (state.profile.name || "Student").trim().split(/\s+/)[0] || "Student";
+  const practiceMinutes = Number(state.coursePlan?.practiceMinutes || Math.round(state.practiceGate.minDurationSeconds / 60) || 7);
+  const submitted = {
+    morning: ["submitted", "reviewed"].includes(state.checkins.morning.status),
+    evening: ["submitted", "reviewed"].includes(state.checkins.evening.status)
+  };
+  const morningRequired = state.coursePlan?.morningRequired !== false;
+  const eveningRequired = state.coursePlan?.eveningRequired !== false;
+
+  document.querySelector("#welcome-quest-title").textContent = `${firstName}, your guitar journey has started.`;
+  document.querySelector("#welcome-quest-copy").textContent = state.practiceGate.locked
+    ? `Finish the required ${practiceMinutes}-minute practice pod to open today's riff gate.`
+    : "Performer path unlocked. Tiny practice, repeated daily, becomes stage confidence.";
+
+  [
+    ["morning", morningRequired, "Morning riff pod complete", "Record or upload morning practice"],
+    ["evening", eveningRequired, "Evening rhythm pod complete", "Record or upload evening practice"]
+  ].forEach(([period, required, completeText, pendingText]) => {
+    const pod = document.querySelector(`[data-quest-pod="${period}"]`);
+    const status = document.querySelector(`#${period}-quest-status`);
+    if (!required) {
+      pod.classList.add("is-complete");
+      status.textContent = "Not required today";
+      return;
+    }
+    pod.classList.toggle("is-complete", submitted[period]);
+    status.textContent = submitted[period] ? completeText : pendingText;
+  });
+
+  const leaderboard = (state.leaderboard?.length ? state.leaderboard : [
+    { rank: 1, name: firstName, instrument: state.profile.instrument, current_week: state.currentWeek, weekly_submissions: 0, is_current_student: true },
+    { rank: 2, name: "Aarav", instrument: "Guitar", current_week: Math.max(1, state.currentWeek - 1), weekly_submissions: 6 },
+    { rank: 3, name: "Maya", instrument: "Guitar", current_week: Math.max(1, state.currentWeek - 1), weekly_submissions: 5 },
+    { rank: 4, name: "Rekha", instrument: "Guitar", current_week: Math.max(1, state.currentWeek - 2), weekly_submissions: 4 }
+  ]).map((student, index) => ({
+    ...student,
+    rank: student.rank || index + 1,
+    current_week: Number(student.current_week || student.currentWeek || 1),
+    weekly_submissions: Number(student.weekly_submissions || 0)
+  }));
+
+  const initialFor = (student) => String(student.name || "S").trim().charAt(0).toUpperCase() || "S";
+  const currentStudent = leaderboard.find((student) => student.is_current_student);
+  const totalPods = leaderboard.reduce((sum, student) => sum + student.weekly_submissions, 0);
+  const groupActive = leaderboard.filter((student) => student.weekly_submissions > 0).length || leaderboard.length;
+  document.querySelector("#group-active-count").textContent = groupActive;
+  document.querySelector("#your-journey-rank").textContent = currentStudent ? `#${currentStudent.rank}` : "--";
+  document.querySelector("#group-pods-count").textContent = totalPods;
+  document.querySelector("#hall-week-copy").textContent = `${leaderboard.length} learners on the path`;
+
+  const weeklyActivityTarget = 4;
+  const localPracticeCount = Number(submitted.morning) + Number(submitted.evening);
+  const currentWeeklySubmissions = currentStudent ? currentStudent.weekly_submissions : localPracticeCount;
+  const weeklyActivityCount = Math.min(weeklyActivityTarget, Math.max(localPracticeCount, currentWeeklySubmissions));
+  const weeklyActivityPercent = Math.round((weeklyActivityCount / weeklyActivityTarget) * 100);
+  const weeklyArc = document.querySelector("#weekly-activity-arc");
+  document.querySelector("#weekly-activity-count").textContent = weeklyActivityCount;
+  document.querySelector("#weekly-activity-target").textContent = weeklyActivityTarget;
+  if (weeklyArc) {
+    weeklyArc.style.strokeDasharray = `${weeklyActivityPercent} 100`;
+  }
+  document.querySelector("#weekly-activity-message").textContent = weeklyActivityCount >= weeklyActivityTarget
+    ? "Mission complete! You are a goal-crushing performer."
+    : weeklyActivityCount === 0
+      ? "Start with one practice pod today. Your performer path wakes up after the first upload."
+      : `${weeklyActivityTarget - weeklyActivityCount} more activity ${weeklyActivityTarget - weeklyActivityCount === 1 ? "step" : "steps"} to finish this week's stage.`;
+  document.querySelector("#activity-mini-track").innerHTML = Array.from({ length: weeklyActivityTarget }, (_, index) => `
+    <span class="${index < weeklyActivityCount ? "is-complete" : ""} ${index === weeklyActivityCount ? "is-current" : ""}"></span>
+  `).join("");
+
+  document.querySelector("#hall-of-fame-list").innerHTML = leaderboard.slice(0, 3).map((student, index) => `
+    <article class="fame-card ${student.is_current_student ? "is-you" : ""}">
+      <span class="fame-ring">${initialFor(student)}</span>
+      <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
+      <small>Week ${student.current_week} - ${student.weekly_submissions}/14 pods</small>
+      <em>${index === 0 ? "Lead performer" : index === 1 ? "Steady mover" : "Rising player"}</em>
+    </article>
+  `).join("");
+
+  const maxWeek = Math.max(4, ...leaderboard.map((student) => student.current_week));
+  const roadmapEnd = Math.max(4, Math.min(12, Math.max(maxWeek, state.currentWeek)));
+  const roadmapStart = Math.max(1, roadmapEnd - 3);
+  const roadmapWeeks = Array.from({ length: Math.min(4, roadmapEnd - roadmapStart + 1) }, (_, index) => roadmapStart + index);
+  const roadColors = ["is-orange", "is-blue", "is-pink", "is-green"];
+  document.querySelector("#performer-map").innerHTML = roadmapWeeks.map((week, index) => {
+    const students = leaderboard.filter((student) => student.current_week === week);
+    const visible = students.slice(0, 3);
+    const weekScore = students.reduce((sum, student) => sum + student.weekly_submissions, 0);
+    return `
+      <article class="roadmap-week roadmap-week-${index + 1} ${week === state.currentWeek ? "is-current" : ""}">
+        <span class="roadmap-week-label">Week ${week}</span>
+        <div class="roadmap-track">
+          <span class="road-crystal"></span>
+          <span class="road-stone"></span>
+          <span class="road-stone"></span>
+          <span class="road-stone"></span>
+          <div class="road-avatar-stack">
+            ${visible.map((student, avatarIndex) => `
+              <span class="road-avatar ${student.is_current_student ? "is-you" : roadColors[avatarIndex % roadColors.length]}">${initialFor(student)}</span>
+            `).join("")}
+            ${students.length ? `<em>+${Math.max(weekScore, students.length)}</em>` : `<span class="road-avatar is-empty"></span>`}
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  document.querySelector("#weekly-progress-list").innerHTML = Array.from({ length: Math.min(maxWeek, 8) }, (_, index) => {
+    const week = Math.min(maxWeek, 8) - index;
+    const students = leaderboard.filter((student) => student.current_week === week);
+    const visible = students.slice(0, 3);
+    return `
+      <article class="weekly-progress-row">
+        <strong>Week ${week}</strong>
+        <div class="weekly-avatar-stack">
+          ${visible.map((student) => `<span class="${student.is_current_student ? "is-you" : ""}">${initialFor(student)}</span>`).join("")}
+          <em>+${Math.max(0, students.length - visible.length)}</em>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  document.querySelector("#leaderboard-list").innerHTML = leaderboard.slice(0, 10).map((student) => `
+    <article class="leaderboard-row ${student.is_current_student ? "is-you" : ""}">
+      <span class="leaderboard-rank">${student.rank}</span>
+      <div>
+        <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
+        <small>${escapeHtml(student.instrument || "Guitar")} - Week ${student.current_week || 1}</small>
+      </div>
+      <span class="leaderboard-score">${student.weekly_submissions || 0}/14 pods</span>
+    </article>
+  `).join("");
 }
 
 function renderCourse() {
@@ -548,14 +714,14 @@ function renderCheckins() {
   ["morning", "evening"].forEach((period) => {
     const checkin = state.checkins[period];
     const badge = document.querySelector(`#${period}-status-badge`);
-    const fileLabel = document.querySelector(`#${period}-file-label`);
-    const timeLabel = document.querySelector(`#${period}-upload-time`);
     const preview = document.querySelector(`#${period}-preview`);
     const required = period === "morning" ? state.coursePlan?.morningRequired : state.coursePlan?.eveningRequired;
     const removeButton = document.querySelector(`[data-remove-upload="${period}"]`);
+    const submitButton = document.querySelector(`[data-submit-upload="${period}"]`);
     document.querySelector(`[data-period="${period}"]`).hidden = !required;
     document.querySelector(`#${period}-practice-requirement`).textContent = `Minimum ${practiceMinutes}-minute practice`;
     removeButton.hidden = checkin.status !== "submitted" || !checkin.id;
+    submitButton.hidden = checkin.status !== "selected";
 
     badge.className = "upload-status";
     if (checkin.status === "reviewed") {
@@ -570,13 +736,27 @@ function renderCheckins() {
       badge.textContent = "Due today";
     }
 
-    if (checkin.fileName) {
-      fileLabel.textContent = checkin.fileName;
-      timeLabel.textContent = checkin.time ? `Uploaded at ${checkin.time}` : "Video selected";
+    if (temporaryVideoUrls[period]) {
+      const duration = Number(checkin.durationSeconds || 0);
+      preview.innerHTML = `
+        <video controls playsinline src="${temporaryVideoUrls[period]}"></video>
+        <strong>${escapeHtml(checkin.fileName || `${period}-practice.webm`)}</strong>
+        <small>${duration ? `${Math.floor(duration / 60)}m ${duration % 60}s selected` : "Video selected"}</small>
+      `;
+      preview.classList.remove("is-empty");
+    } else if (checkin.fileName) {
+      preview.innerHTML = `
+        <span class="video-placeholder-icon">▶</span>
+        <strong id="${period}-file-label">${escapeHtml(checkin.fileName)}</strong>
+        <small id="${period}-upload-time">${checkin.time ? `Uploaded at ${escapeHtml(checkin.time)}` : "Video selected"}</small>
+      `;
       preview.classList.remove("is-empty");
     } else {
-      fileLabel.textContent = "Record or choose a video";
-      timeLabel.textContent = period === "morning" ? "Due by 9:00 AM" : "Due by 8:00 PM";
+      preview.innerHTML = `
+        <span class="video-placeholder-icon">+</span>
+        <strong id="${period}-file-label">Record or upload a video</strong>
+        <small id="${period}-upload-time">${period === "morning" ? "Due by 9:00 AM" : "Due by 8:00 PM"}</small>
+      `;
       preview.classList.add("is-empty");
     }
   });
@@ -703,26 +883,22 @@ function readVideoDuration(file, objectUrl) {
   });
 }
 
-async function handleUploadSelection(input) {
-  const period = input.dataset.uploadInput;
-  const file = input.files?.[0];
-  if (!file) return;
+async function acceptPracticeVideo(period, file, knownDurationSeconds = null) {
+  if (!file) return false;
 
   if (!file.type.startsWith("video/")) {
     showToast("Please choose a video file.");
-    input.value = "";
-    return;
+    return false;
   }
 
   if (temporaryVideoUrls[period]) URL.revokeObjectURL(temporaryVideoUrls[period]);
   temporaryVideoUrls[period] = URL.createObjectURL(file);
   let durationSeconds;
   try {
-    durationSeconds = await readVideoDuration(file, temporaryVideoUrls[period]);
+    durationSeconds = knownDurationSeconds || await readVideoDuration(file, temporaryVideoUrls[period]);
   } catch (error) {
     showToast(error.message);
-    input.value = "";
-    return;
+    return false;
   }
 
   const minimumSeconds = state.practiceGate.minDurationSeconds || 420;
@@ -730,8 +906,7 @@ async function handleUploadSelection(input) {
     showToast(`Choose a video of at least ${Math.round(minimumSeconds / 60)} minutes.`);
     URL.revokeObjectURL(temporaryVideoUrls[period]);
     delete temporaryVideoUrls[period];
-    input.value = "";
-    return;
+    return false;
   }
   selectedPracticeFiles[period] = file;
 
@@ -742,14 +917,131 @@ async function handleUploadSelection(input) {
     durationSeconds
   };
 
-  const preview = document.querySelector(`#${period}-preview`);
-  preview.innerHTML = `
-    <video controls playsinline src="${temporaryVideoUrls[period]}"></video>
-    <small>${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s selected</small>
-  `;
-  preview.classList.remove("is-empty");
-  document.querySelector(`[data-submit-upload="${period}"]`).hidden = false;
   renderCheckins();
+  return true;
+}
+
+async function handleUploadSelection(input) {
+  const period = input.dataset.uploadInput;
+  const file = input.files?.[0];
+  await acceptPracticeVideo(period, file);
+  input.value = "";
+}
+
+function formatRecorderTime(seconds) {
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
+  const remaining = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${remaining}`;
+}
+
+function resetRecorderUi() {
+  document.querySelector("#practice-recorder-timer").textContent = "00:00";
+  document.querySelector("#start-practice-recording").disabled = false;
+  document.querySelector("#stop-practice-recording").disabled = true;
+  document.querySelector("#use-practice-recording").disabled = true;
+  document.querySelector("#recorder-helper").textContent = "Allow camera and microphone, then record your practice video.";
+}
+
+function stopRecorderStream() {
+  window.clearInterval(recorderTimerId);
+  recorderTimerId = 0;
+  recorderStream?.getTracks().forEach((track) => track.stop());
+  recorderStream = null;
+  practiceRecorder = null;
+}
+
+function recorderOptions() {
+  const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  const supported = typeof MediaRecorder.isTypeSupported === "function"
+    ? candidates.find((type) => MediaRecorder.isTypeSupported(type))
+    : "";
+  return supported ? { mimeType: supported } : {};
+}
+
+async function openPracticeRecorder(period) {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    showToast("Recording is not available in this browser. Please use Upload video.");
+    return;
+  }
+  recorderPeriod = period;
+  recorderChunks = [];
+  recordedPracticeBlob = null;
+  recordedPracticeSeconds = 0;
+  if (recordedPracticeUrl) URL.revokeObjectURL(recordedPracticeUrl);
+  recordedPracticeUrl = "";
+  resetRecorderUi();
+  document.querySelector("#recorder-period-label").textContent = `${period.toUpperCase()} PRACTICE`;
+  const modal = document.querySelector("#practice-recorder-modal");
+  modal.showModal();
+  try {
+    recorderStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const preview = document.querySelector("#practice-recorder-preview");
+    preview.srcObject = recorderStream;
+    preview.controls = false;
+    preview.muted = true;
+    document.querySelector("#practice-recorder-empty").hidden = true;
+  } catch {
+    document.querySelector("#practice-recorder-empty").hidden = false;
+    showToast("Camera permission was not available. Use Upload video for now.");
+  }
+}
+
+function startPracticeRecording() {
+  if (!recorderStream) {
+    showToast("Camera is not ready yet.");
+    return;
+  }
+  recorderChunks = [];
+  practiceRecorder = new MediaRecorder(recorderStream, recorderOptions());
+  practiceRecorder.ondataavailable = (event) => {
+    if (event.data.size) recorderChunks.push(event.data);
+  };
+  practiceRecorder.onstop = () => {
+    recordedPracticeSeconds = Math.max(1, Math.round((Date.now() - recorderStartedAt) / 1000));
+    recordedPracticeBlob = new Blob(recorderChunks, { type: "video/webm" });
+    recordedPracticeUrl = URL.createObjectURL(recordedPracticeBlob);
+    const preview = document.querySelector("#practice-recorder-preview");
+    preview.srcObject = null;
+    preview.src = recordedPracticeUrl;
+    preview.controls = true;
+    preview.muted = false;
+    document.querySelector("#use-practice-recording").disabled = false;
+    document.querySelector("#recorder-helper").textContent = "Preview your recording. Use it, or close and record again.";
+  };
+  recorderStartedAt = Date.now();
+  practiceRecorder.start();
+  document.querySelector("#start-practice-recording").disabled = true;
+  document.querySelector("#stop-practice-recording").disabled = false;
+  document.querySelector("#use-practice-recording").disabled = true;
+  recorderTimerId = window.setInterval(() => {
+    document.querySelector("#practice-recorder-timer").textContent =
+      formatRecorderTime((Date.now() - recorderStartedAt) / 1000);
+  }, 500);
+}
+
+function stopPracticeRecording() {
+  if (!practiceRecorder || practiceRecorder.state === "inactive") return;
+  practiceRecorder.stop();
+  window.clearInterval(recorderTimerId);
+  document.querySelector("#stop-practice-recording").disabled = true;
+}
+
+async function usePracticeRecording() {
+  if (!recordedPracticeBlob || !recorderPeriod) return;
+  const file = new File([recordedPracticeBlob], `${recorderPeriod}-practice-recording.webm`, { type: "video/webm" });
+  const accepted = await acceptPracticeVideo(recorderPeriod, file, recordedPracticeSeconds);
+  if (accepted) closePracticeRecorder();
+}
+
+function closePracticeRecorder() {
+  if (practiceRecorder && practiceRecorder.state !== "inactive") practiceRecorder.stop();
+  stopRecorderStream();
+  const preview = document.querySelector("#practice-recorder-preview");
+  preview.pause();
+  preview.srcObject = null;
+  preview.removeAttribute("src");
+  document.querySelector("#practice-recorder-empty").hidden = false;
+  document.querySelector("#practice-recorder-modal").close();
 }
 
 async function submitUpload(period) {
@@ -773,9 +1065,13 @@ async function submitUpload(period) {
     if (period === "evening") state.streak = Math.max(state.streak, 7);
     saveState();
     button.hidden = true;
+    if (temporaryVideoUrls[period]) URL.revokeObjectURL(temporaryVideoUrls[period]);
+    delete temporaryVideoUrls[period];
     delete selectedPracticeFiles[period];
     await syncStudentFromBackend();
-    showToast(`${period === "morning" ? "Morning" : "Evening"} practice check-in submitted. Video storage will be enabled next.`);
+    showToast(period === "morning"
+      ? "Morning Ninja unlocked. Course energy is building."
+      : "Evening Finisher unlocked. Strong close today.");
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -797,11 +1093,6 @@ async function removePendingSubmission(submissionId) {
 }
 
 async function openClassroom(roomName) {
-  if (state.practiceGate.locked) {
-    renderPracticeGate(true);
-    showToast("Complete the required practice upload before entering the classroom.");
-    return;
-  }
   const modal = document.querySelector("#classroom-modal");
   const frame = document.querySelector("#classroom-frame");
   const liveRoom = document.querySelector("#open-live-room");
@@ -912,6 +1203,7 @@ async function verifyStudentOtp(event) {
     backendFeedback = null;
     setAuthVisible(false);
     await syncStudentFromBackend();
+    showFirstLoginCelebration(result.student.name, result.student.email || pendingLoginEmail);
     showToast(`Welcome back, ${result.student.name}.`);
   } catch (error) {
     showAuthError(error.message);
@@ -942,6 +1234,10 @@ function bindEvents() {
     button.addEventListener("click", () => navigate(button.dataset.view));
   });
 
+  document.querySelector("#view-leaderboard-button")?.addEventListener("click", () => {
+    document.querySelector("#leaderboard-list")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
   document.querySelector("#student-email-form").addEventListener("submit", requestStudentOtp);
   document.querySelector("#student-otp-form").addEventListener("submit", verifyStudentOtp);
   document.querySelector("#student-change-email").addEventListener("click", () => {
@@ -953,6 +1249,10 @@ function bindEvents() {
 
   document.querySelectorAll("[data-upload-input]").forEach((input) => {
     input.addEventListener("change", () => handleUploadSelection(input));
+  });
+
+  document.querySelectorAll("[data-record-practice]").forEach((button) => {
+    button.addEventListener("click", () => openPracticeRecorder(button.dataset.recordPractice));
   });
 
   document.querySelectorAll("[data-submit-upload]").forEach((button) => {
@@ -990,14 +1290,7 @@ function bindEvents() {
   });
 
   document.querySelectorAll(".open-help-call").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (state.practiceGate.locked) {
-        renderPracticeGate(true);
-        showToast("Upload the required practice before requesting a quick call.");
-        return;
-      }
-      openHelpCallModal();
-    });
+    button.addEventListener("click", () => openHelpCallModal());
   });
 
   document.querySelector("#practice-gate-upload").addEventListener("click", () => {
@@ -1011,7 +1304,15 @@ function bindEvents() {
     sessionStorage.setItem("otsPracticeGateSnoozedUntil", String(Date.now() + 10 * 60 * 1000));
     document.querySelector("#practice-gate").hidden = true;
     navigate("checkin", true);
-    showToast("Reminder snoozed for 10 minutes. Other sections remain locked.");
+    showToast("Reminder snoozed for 10 minutes. Course stays paused until practice is submitted.");
+  });
+
+  document.querySelector("#start-practice-recording").addEventListener("click", startPracticeRecording);
+  document.querySelector("#stop-practice-recording").addEventListener("click", stopPracticeRecording);
+  document.querySelector("#use-practice-recording").addEventListener("click", usePracticeRecording);
+  document.querySelector("#close-practice-recorder").addEventListener("click", closePracticeRecorder);
+  document.querySelector("#welcome-modal-close").addEventListener("click", () => {
+    document.querySelector("#welcome-modal").close();
   });
 
   document.querySelector("#close-classroom").addEventListener("click", closeClassroom);
@@ -1117,11 +1418,9 @@ function bindEvents() {
   });
 
   document.querySelector("#notification-button").addEventListener("click", () => {
-    if (state.practiceGate.locked) {
-      renderPracticeGate(true);
-      return;
-    }
-    showToast(`Your practice is on track. ${teacherIdentity().firstName} will review new uploads here.`);
+    showToast(state.practiceGate.locked
+      ? "Home, Check-in, Feedback and Profile are open. Course unlocks after practice."
+      : `Your practice is on track. ${teacherIdentity().firstName} will review new uploads here.`);
   });
 
   document.querySelector("#student-logout").addEventListener("click", logoutStudent);
@@ -1139,7 +1438,7 @@ async function init() {
   }
 
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
   }
 }
 
