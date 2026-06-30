@@ -1,0 +1,40 @@
+Google Drive backend setup for practice videos
+==============================================
+
+Do not put Google Drive keys in GitHub.
+Drive upload must happen only through the Cloudflare Worker backend.
+
+The app code is ready. To make real video upload work:
+
+1. Google Cloud Console
+   - Create/select a project.
+   - Enable Google Drive API.
+   - Create a service account named ots-music-school-drive.
+   - Create a JSON key for that service account.
+   - Copy client_email and private_key from the JSON.
+
+2. Google Drive
+   - Create folder: MUSIC SCHOOL OTS - Practice Videos
+   - Open the folder and copy the folder id from the URL.
+   - Share this folder with the service account client_email as Editor.
+
+3. Cloudflare Worker secrets
+   Add these secrets in Workers & Pages > music-school-ots > Settings > Variables and secrets:
+
+   GOOGLE_DRIVE_CLIENT_EMAIL
+   GOOGLE_DRIVE_PRIVATE_KEY
+   GOOGLE_DRIVE_PARENT_FOLDER_ID
+
+   Optional:
+   MAX_PRACTICE_VIDEO_MB = 95
+
+4. Redeploy the Cloudflare Worker.
+
+5. Check:
+   https://music-school-ots.sharoncornerstone56.workers.dev/api/health
+
+   It should show:
+   "videoStorage": "google-drive"
+
+After this, student videos will be uploaded into separate Drive folders per student,
+and teacher/admin can view the private video inside the app review screen.

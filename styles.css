@@ -1159,6 +1159,15 @@ p {
   color: #c5cad9;
 }
 
+.video-preview .practice-duration-warning {
+  max-width: 90%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 241, 220, 0.92);
+  color: #8d4500;
+  font-weight: 800;
+}
+
 .is-empty small {
   color: var(--muted);
 }
@@ -1738,6 +1747,52 @@ textarea:focus {
   color: var(--purple);
   font-size: 1.2rem;
   letter-spacing: 0.18em;
+}
+
+.admission-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 200, 87, 0.22);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(245, 119, 161, 0.18), transparent 36%),
+    rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+.admission-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 15px;
+  background: linear-gradient(135deg, var(--ots-orange, #f0771e), var(--ots-pink, #f577a1), var(--purple));
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.admission-card strong {
+  display: block;
+  color: #ffffff;
+  font-size: 0.95rem;
+}
+
+.admission-card p {
+  margin: 7px 0 12px;
+  color: rgba(248, 244, 255, 0.72);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.admission-card .button {
+  width: fit-content;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.82rem;
 }
 
 .modal {
@@ -2987,6 +3042,137 @@ textarea:focus {
   background: #ffffff;
 }
 
+/* Final student/admin palette alignment */
+.onboarding {
+  background:
+    radial-gradient(circle at 84% 8%, rgba(98, 87, 158, 0.48), transparent 34%),
+    radial-gradient(circle at 10% 88%, rgba(240, 119, 30, 0.18), transparent 28%),
+    #0d0b1a;
+}
+
+.onboarding-panel.auth-panel {
+  border: 1px solid rgba(244, 240, 255, 0.13);
+  background:
+    radial-gradient(circle at 88% 8%, rgba(245, 119, 161, 0.16), transparent 30%),
+    linear-gradient(145deg, rgba(28, 24, 45, 0.97), rgba(13, 11, 26, 0.98));
+  color: #f4f0ff;
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.auth-panel .brand-lockup strong,
+.auth-panel .onboarding-copy h1,
+.auth-panel label {
+  color: #ffffff;
+}
+
+.auth-panel .brand-lockup small,
+.auth-panel .onboarding-copy p:last-child,
+.auth-panel .microcopy {
+  color: rgba(244, 240, 255, 0.72);
+}
+
+.auth-panel .stack-form input,
+.auth-panel #student-login-email,
+.auth-panel #student-login-otp {
+  border: 1px solid rgba(244, 240, 255, 0.18);
+  background: rgba(244, 240, 255, 0.1);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.auth-panel .stack-form input::placeholder,
+.auth-panel #student-login-otp::placeholder {
+  color: rgba(244, 240, 255, 0.52);
+}
+
+.auth-panel .stack-form input:focus,
+.auth-panel #student-login-otp:focus {
+  border-color: #f0771e;
+  box-shadow: 0 0 0 3px rgba(240, 119, 30, 0.22), 0 18px 36px rgba(245, 119, 161, 0.18);
+}
+
+.auth-destination {
+  border: 1px solid rgba(244, 240, 255, 0.12);
+  background: rgba(244, 240, 255, 0.1);
+  color: rgba(244, 240, 255, 0.78);
+}
+
+.auth-destination strong,
+.auth-back {
+  color: #ffd36a;
+}
+
+#student-login-otp {
+  color: #ffffff;
+  caret-color: #f0771e;
+}
+
+.auth-error {
+  border: 1px solid rgba(255, 145, 160, 0.22);
+  background: rgba(255, 145, 160, 0.12);
+  color: #ffb0bd;
+}
+
+.sidebar {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(112, 87, 255, 0.22), transparent 32%),
+    linear-gradient(180deg, rgba(17, 20, 38, 0.98), rgba(13, 11, 26, 0.98));
+}
+
+.side-nav {
+  gap: 10px;
+}
+
+.side-nav .nav-item {
+  min-height: 54px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  color: rgba(248, 244, 255, 0.66);
+  box-shadow: none;
+}
+
+.side-nav .nav-item:hover,
+.side-nav .nav-item:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+.side-nav .nav-item.is-active {
+  background: linear-gradient(135deg, rgba(240, 119, 30, 0.98), rgba(245, 119, 161, 0.92));
+  color: white;
+  box-shadow: 0 18px 38px rgba(245, 119, 161, 0.28);
+}
+
+.bottom-nav {
+  background: rgba(13, 11, 26, 0.94);
+  box-shadow: 0 -18px 36px rgba(0, 0, 0, 0.26);
+}
+
+.bottom-nav .nav-item {
+  border: 1px solid rgba(244, 240, 255, 0.1);
+  background: rgba(244, 240, 255, 0.07);
+  color: rgba(244, 240, 255, 0.68);
+  box-shadow: none;
+}
+
+.bottom-nav .nav-item.is-active {
+  background: linear-gradient(135deg, rgba(112, 87, 255, 0.82), rgba(245, 119, 161, 0.72));
+  color: white;
+}
+
+.practice-gate-card {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(245, 119, 161, 0.18), transparent 32%),
+    linear-gradient(145deg, rgba(28, 24, 45, 0.98), rgba(13, 11, 26, 0.98));
+}
+
+.practice-gate-card h1,
+.practice-gate-card > p:not(.eyebrow),
+.practice-gate-card small {
+  color: #f4f0ff;
+}
+
 @media (max-width: 1020px) {
   .sidebar {
     width: 210px;
@@ -3347,5 +3533,421 @@ textarea:focus {
 
   .feedback-card {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Exact admin-panel colour system for the student app. Keep this last. */
+:root {
+  --navy: #0f1020;
+  --navy-soft: #1d1830;
+  --purple: #7057ff;
+  --purple-dark: #5840e8;
+  --purple-pale: rgba(112, 87, 255, 0.18);
+  --cream: rgba(255, 243, 223, 0.1);
+  --yellow: #ffc857;
+  --green: #22d98a;
+  --green-pale: rgba(34, 217, 138, 0.14);
+  --amber: #ffb84d;
+  --amber-pale: rgba(255, 184, 77, 0.16);
+  --red: #ff6678;
+  --red-pale: rgba(255, 102, 120, 0.15);
+  --ink: #f8f4ff;
+  --muted: #b9afca;
+  --line: rgba(255, 255, 255, 0.14);
+  --surface: rgba(26, 22, 40, 0.78);
+  --background: #100d19;
+  --danger: #ff6678;
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+  --clay-shadow: 12px 16px 36px rgba(0, 0, 0, 0.28), -8px -8px 24px rgba(255, 255, 255, 0.04);
+  --clay-inset: inset 7px 7px 16px rgba(0, 0, 0, 0.22), inset -8px -8px 18px rgba(255, 255, 255, 0.035);
+  --glow: 0 0 42px rgba(112, 87, 255, 0.22);
+  --ots-orange: #f0771e;
+  --ots-pink: #f577a1;
+}
+
+body {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(240, 119, 30, 0.22), transparent 26%),
+    radial-gradient(circle at 82% 12%, rgba(112, 87, 255, 0.34), transparent 30%),
+    radial-gradient(circle at 70% 86%, rgba(34, 217, 138, 0.1), transparent 30%),
+    linear-gradient(135deg, #0b0d1b 0%, #171123 52%, #0c0b17 100%);
+  color: var(--ink);
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  opacity: 0.18;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.54) 0 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.24) 0 1px, transparent 1.5px);
+  background-position: 28px 30px, 92px 86px;
+  background-size: 150px 160px, 220px 230px;
+  content: "";
+  pointer-events: none;
+}
+
+.ambient-one,
+.ambient-two {
+  opacity: 0.16;
+}
+
+.app-shell,
+.main-column {
+  background: transparent;
+}
+
+.sidebar {
+  width: 268px;
+  padding: 28px 22px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(112, 87, 255, 0.22), transparent 32%),
+    linear-gradient(180deg, rgba(17, 20, 38, 0.98), rgba(13, 11, 26, 0.98));
+  box-shadow: 18px 0 60px rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+}
+
+.main-column {
+  margin-left: 268px;
+}
+
+.brand-mark,
+.teacher-avatar,
+.week-number,
+.session-date,
+.road-avatar,
+.fame-ring,
+.nav-item.is-active svg {
+  background: linear-gradient(135deg, var(--ots-orange), var(--ots-pink), var(--purple));
+  color: #ffffff;
+  box-shadow: 0 14px 30px rgba(112, 87, 255, 0.22);
+}
+
+.brand-lockup strong,
+.mobile-brand strong,
+.hero-content h1,
+.page-intro h1,
+.section-heading h2,
+.upload-heading h2,
+.preferences-panel h2,
+.course-progress-card strong,
+.week-copy h3,
+.feedback-card h3,
+.quest-card h2,
+.performer-journey-panel h2,
+.hall-panel h2,
+.speedometer-card h3,
+.space-roadmap-card h3,
+.leaderboard-row strong,
+.fame-card strong,
+.profile-summary h2,
+.modal-card h2,
+.onboarding-copy h1 {
+  color: #ffffff;
+}
+
+.brand-lockup small,
+.mobile-brand small,
+.hero-content > p:not(.eyebrow),
+.page-intro p:last-child,
+.section-heading p,
+.session-copy p,
+.teacher-focus p,
+.feedback-card p,
+.stat-card small,
+.stat-label,
+.daily-item small,
+.history-row span,
+.course-description,
+.week-copy p,
+.week-milestone p,
+.quest-card p,
+.speedometer-card p,
+.hall-heading p,
+.leaderboard-row small,
+.fame-card small,
+.fame-card em,
+.profile-summary p,
+.modal-card > p:not(.eyebrow),
+.microcopy {
+  color: var(--muted);
+}
+
+.eyebrow {
+  color: #ffd36a;
+}
+
+.side-nav {
+  gap: 10px;
+}
+
+.side-nav .nav-item {
+  min-height: 54px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: transparent;
+  color: rgba(248, 244, 255, 0.66);
+  box-shadow: none;
+}
+
+.side-nav .nav-item:hover,
+.side-nav .nav-item:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+.side-nav .nav-item.is-active {
+  background: linear-gradient(135deg, rgba(112, 87, 255, 0.95), rgba(245, 119, 161, 0.72));
+  color: #ffffff;
+  box-shadow: 0 16px 35px rgba(112, 87, 255, 0.22);
+}
+
+.side-nav .nav-item.is-active svg {
+  background: transparent;
+  box-shadow: none;
+}
+
+.sidebar-support,
+.topbar,
+.hero-card,
+.stat-card,
+.panel,
+.session-card,
+.teacher-focus,
+.course-progress-card,
+.week-card,
+.week-milestone,
+.upload-card,
+.feedback-card,
+.profile-card,
+.preferences-panel,
+.quest-card,
+.performer-journey-panel,
+.hall-panel,
+.speedometer-card,
+.space-roadmap-card,
+.leaderboard-row,
+.fame-card,
+.modal-card,
+.onboarding-panel.auth-panel,
+.practice-gate-card {
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(145deg, rgba(31, 26, 47, 0.92), rgba(17, 14, 29, 0.92)),
+    var(--surface);
+  box-shadow: var(--clay-shadow);
+  color: var(--ink);
+}
+
+.topbar {
+  min-height: 88px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(15, 14, 27, 0.82);
+  backdrop-filter: blur(22px);
+  box-shadow: none;
+}
+
+.icon-button,
+.avatar-button {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.notification-dot,
+.progress-track span {
+  background: var(--purple);
+}
+
+.button-primary,
+.auth-panel .button-primary,
+.journey-cta,
+.practice-gate-actions .button-primary {
+  background: linear-gradient(135deg, var(--ots-orange), var(--ots-pink) 54%, var(--purple));
+  color: #ffffff;
+  box-shadow: 0 18px 38px rgba(245, 119, 161, 0.2);
+}
+
+.button-primary:hover,
+.button-primary:focus-visible,
+.auth-panel .button-primary:hover,
+.auth-panel .button-primary:focus-visible {
+  background: linear-gradient(135deg, #ff842b, #ff7cac 54%, #7b63ff);
+}
+
+.button-secondary,
+.button-light,
+.text-button,
+.practice-gate-actions .button-secondary {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: #efe9ff;
+  box-shadow: none;
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: #ffd36a;
+}
+
+.hero-card,
+.page-intro,
+.teacher-banner {
+  background:
+    radial-gradient(circle at 82% 6%, rgba(112, 87, 255, 0.24), transparent 36%),
+    rgba(255, 255, 255, 0.045);
+}
+
+.hero-card::after,
+.course-progress-card::before,
+.quest-card::after,
+.performer-journey-panel::before,
+.speedometer-card::before,
+.space-roadmap-card::before,
+.space-roadmap-card::after {
+  opacity: 0.5;
+}
+
+.orbit-core,
+.speedometer-center {
+  background: linear-gradient(135deg, var(--ots-pink), var(--purple));
+  color: #ffffff;
+}
+
+.progress-track,
+.distribution-track,
+.activity-track,
+.speedometer-track,
+.daily-progress-track {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.tag-purple,
+.session-date,
+.upload-status,
+.week-state,
+.auth-destination,
+.profile-chip {
+  border: 1px solid rgba(112, 87, 255, 0.22);
+  background: rgba(112, 87, 255, 0.18);
+  color: #d8d1ff;
+}
+
+.tag-yellow {
+  background: rgba(255, 184, 77, 0.16);
+  color: #ffd36a;
+}
+
+.tag-green,
+.upload-status.is-reviewed,
+.upload-status.is-submitted,
+.daily-item.is-complete .check-icon {
+  background: rgba(34, 217, 138, 0.14);
+  color: var(--green);
+}
+
+.daily-item,
+.history-row,
+.feedback-input,
+.slot-option,
+.classroom-preview,
+.video-preview.is-empty,
+.auth-destination,
+.demo-credentials,
+.admission-card {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.video-preview {
+  background:
+    radial-gradient(circle at 82% 0%, rgba(112, 87, 255, 0.18), transparent 35%),
+    radial-gradient(circle at 10% 100%, rgba(240, 119, 30, 0.12), transparent 32%),
+    linear-gradient(145deg, rgba(31, 26, 47, 0.92), rgba(17, 14, 29, 0.92));
+}
+
+.video-preview.is-empty {
+  color: var(--ink);
+}
+
+label {
+  color: #efe9ff;
+}
+
+input,
+select,
+textarea,
+.auth-panel .stack-form input,
+.auth-panel #student-login-email,
+.auth-panel #student-login-otp {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+input::placeholder,
+textarea::placeholder,
+.auth-panel .stack-form input::placeholder,
+.auth-panel #student-login-otp::placeholder {
+  color: rgba(248, 244, 255, 0.48);
+}
+
+select option {
+  background: #171123;
+  color: #ffffff;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.auth-panel .stack-form input:focus,
+.auth-panel #student-login-otp:focus {
+  border-color: rgba(112, 87, 255, 0.95);
+  box-shadow: 0 0 0 4px rgba(112, 87, 255, 0.18), var(--glow);
+}
+
+.bottom-nav {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(13, 11, 26, 0.96);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.bottom-nav .nav-item {
+  border: 1px solid rgba(244, 240, 255, 0.1);
+  background: rgba(244, 240, 255, 0.06);
+  color: rgba(244, 240, 255, 0.74);
+  box-shadow: none;
+}
+
+.bottom-nav .nav-item.is-active {
+  background: linear-gradient(135deg, rgba(112, 87, 255, 0.95), rgba(245, 119, 161, 0.72));
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(112, 87, 255, 0.24);
+}
+
+@media (max-width: 1020px) {
+  .sidebar {
+    width: 210px;
+  }
+
+  .main-column {
+    margin-left: 210px;
+  }
+}
+
+@media (max-width: 780px) {
+  .main-column {
+    margin-left: 0;
+  }
+
+  .sidebar {
+    display: none;
   }
 }

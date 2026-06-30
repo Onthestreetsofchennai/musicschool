@@ -92,7 +92,7 @@
         <span class="online-dot"></span>
         <div>
           <strong>Backend connected</strong>
-          <small>SQLite operational database</small>
+          <small id="admin-backend-status">Checking storage status...</small>
         </div>
       </div>
     </aside>
@@ -277,6 +277,20 @@
           </section>
         </section>
 
+        <section class="admin-view" id="admin-view-student-detail" data-title="Student 360">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">STUDENT 360</p>
+              <h1>Complete student record</h1>
+              <p>Review scores, alerts, teacher assignment, submissions and session history in one focused page.</p>
+            </div>
+            <button class="admin-button secondary" data-admin-view="students" type="button">Back to students</button>
+          </div>
+          <section class="admin-panel student-detail-page" id="student-page-content">
+            <div class="empty-state">Open a student from the Students table.</div>
+          </section>
+        </section>
+
         <section class="admin-view" id="admin-view-staff" data-title="Staff access">
           <div class="admin-page-intro compact">
             <div>
@@ -397,6 +411,71 @@
             <span class="queue-sla">Target: within 12 hours</span>
           </div>
           <div class="review-queue" id="review-queue"></div>
+        </section>
+
+        <section class="admin-view" id="admin-view-review-detail" data-title="Practice review">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">PRACTICE REVIEW</p>
+              <h1 id="review-modal-title">Review submission</h1>
+              <p id="review-modal-subtitle">Choose a submission from the review queue.</p>
+            </div>
+            <button class="admin-button secondary" data-admin-view="reviews" type="button">Back to review queue</button>
+          </div>
+
+          <form class="admin-panel review-form review-page-form" id="review-form">
+            <input id="review-submission-id" type="hidden">
+
+            <div class="review-video-placeholder">
+              <video id="review-video-player" controls playsinline hidden></video>
+              <iframe
+                id="review-video-frame"
+                class="review-video-frame"
+                title="Practice video preview"
+                allow="autoplay; fullscreen"
+                allowfullscreen
+                hidden
+              ></iframe>
+              <span>Play</span>
+              <div>
+                <strong id="review-file-name">practice-video.mp4</strong>
+                <small id="review-video-message">Loading private practice video...</small>
+              </div>
+            </div>
+
+            <div class="review-text-grid">
+              <label>
+                Positive observation
+                <textarea id="review-positive" rows="3" required>Good focused practice and improved control.</textarea>
+              </label>
+              <label>
+                Main correction
+                <textarea id="review-correction" rows="3" required>Slow the difficult transition and remove unnecessary tension.</textarea>
+              </label>
+            </div>
+
+            <label>
+              Next practice focus
+              <textarea id="review-next-focus" rows="2" required>Repeat the assigned exercise three times before the next upload.</textarea>
+            </label>
+
+            <div class="skill-rating-grid" id="skill-rating-grid">
+              <label>Rhythm <input type="range" min="1" max="5" value="3" data-rating="rhythm"><output>3</output></label>
+              <label>Accuracy <input type="range" min="1" max="5" value="3" data-rating="accuracy"><output>3</output></label>
+              <label>Technique <input type="range" min="1" max="5" value="3" data-rating="technique"><output>3</output></label>
+              <label>Posture <input type="range" min="1" max="5" value="3" data-rating="posture"><output>3</output></label>
+              <label>Musicality <input type="range" min="1" max="5" value="3" data-rating="musicality"><output>3</output></label>
+              <label>Confidence <input type="range" min="1" max="5" value="3" data-rating="confidence"><output>3</output></label>
+              <label>Feedback applied <input type="range" min="1" max="5" value="3" data-rating="feedback_application"><output>3</output></label>
+            </div>
+
+            <label class="checkbox-row">
+              <input id="review-help-call" type="checkbox">
+              <span>Recommend an extra teacher help call</span>
+            </label>
+
+            <button class="admin-button primary large" type="submit">Submit review and update student score</button>
+          </form>
         </section>
 
         <section class="admin-view" id="admin-view-alerts" data-title="Student alerts">
@@ -548,65 +627,6 @@
     </form>
   </dialog>
 
-  <dialog class="admin-modal student-modal" id="student-modal">
-    <div class="modal-surface">
-      <button class="modal-close" data-close-modal="student-modal" aria-label="Close">X</button>
-      <div id="student-modal-content"></div>
-    </div>
-  </dialog>
-
-  <dialog class="admin-modal review-modal" id="review-modal">
-    <form class="modal-surface review-form" id="review-form">
-      <button class="modal-close" type="button" data-close-modal="review-modal" aria-label="Close">X</button>
-      <p class="eyebrow">PRACTICE REVIEW</p>
-      <h2 id="review-modal-title">Review submission</h2>
-      <p class="modal-subtitle" id="review-modal-subtitle"></p>
-      <input id="review-submission-id" type="hidden">
-
-      <div class="review-video-placeholder">
-        <video id="review-video-player" controls playsinline hidden></video>
-        <span>Play</span>
-        <div>
-          <strong id="review-file-name">practice-video.mp4</strong>
-          <small id="review-video-message">Loading private practice video...</small>
-        </div>
-      </div>
-
-      <div class="review-text-grid">
-        <label>
-          Positive observation
-          <textarea id="review-positive" rows="3" required>Good focused practice and improved control.</textarea>
-        </label>
-        <label>
-          Main correction
-          <textarea id="review-correction" rows="3" required>Slow the difficult transition and remove unnecessary tension.</textarea>
-        </label>
-      </div>
-
-      <label>
-        Next practice focus
-        <textarea id="review-next-focus" rows="2" required>Repeat the assigned exercise three times before the next upload.</textarea>
-      </label>
-
-      <div class="skill-rating-grid" id="skill-rating-grid">
-        <label>Rhythm <input type="range" min="1" max="5" value="3" data-rating="rhythm"><output>3</output></label>
-        <label>Accuracy <input type="range" min="1" max="5" value="3" data-rating="accuracy"><output>3</output></label>
-        <label>Technique <input type="range" min="1" max="5" value="3" data-rating="technique"><output>3</output></label>
-        <label>Posture <input type="range" min="1" max="5" value="3" data-rating="posture"><output>3</output></label>
-        <label>Musicality <input type="range" min="1" max="5" value="3" data-rating="musicality"><output>3</output></label>
-        <label>Confidence <input type="range" min="1" max="5" value="3" data-rating="confidence"><output>3</output></label>
-        <label>Feedback applied <input type="range" min="1" max="5" value="3" data-rating="feedback_application"><output>3</output></label>
-      </div>
-
-      <label class="checkbox-row">
-        <input id="review-help-call" type="checkbox">
-        <span>Recommend an extra teacher help call</span>
-      </label>
-
-      <button class="admin-button primary large" type="submit">Submit review and update student score</button>
-    </form>
-  </dialog>
-
   <dialog class="admin-modal" id="create-student-modal">
     <form class="modal-surface" id="create-student-form">
       <button class="modal-close" type="button" data-close-modal="create-student-modal" aria-label="Close">X</button>
@@ -639,8 +659,9 @@
           </select>
         </label>
         <label>
-          Assigned teacher
-          <select id="create-student-teacher" required></select>
+          Assigned teachers
+          <select id="create-student-teacher" multiple size="4" required></select>
+          <small class="field-hint">Choose up to 3 teachers. The first selected teacher becomes primary.</small>
         </label>
         <label>
           Course start

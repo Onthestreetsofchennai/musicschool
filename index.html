@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#111426">
   <meta name="description" content="MUSIC SCHOOL OTS guided 12-week music learning app">
   <title>MUSIC SCHOOL OTS</title>
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -48,6 +48,14 @@
         <strong id="development-otp-code"></strong>
       </div>
       <p class="auth-error" id="student-auth-error" hidden></p>
+      <div class="admission-card" id="student-admission-card" hidden>
+        <span class="admission-icon">OTS</span>
+        <div>
+          <strong>We would love to have you as a student.</strong>
+          <p>Your email is not added to the current student list yet. Please contact us, and we will arrange a short interview before you step into the course.</p>
+          <a class="button button-primary" id="student-apply-whatsapp" href="https://wa.me/919841610111?text=Hi%20MUSIC%20SCHOOL%20OTS%2C%20I%20wanna%20apply%20for%20the%20music%20course." target="_blank" rel="noopener">Apply now on WhatsApp</a>
+        </div>
+      </div>
       <p class="microcopy">Use the email address registered by your music school administrator.</p>
     </div>
   </div>
@@ -144,7 +152,7 @@
             </div>
             <div class="hero-orbit" aria-hidden="true">
               <span class="orbit-ring"></span>
-              <span class="orbit-core">G<span id="orbit-week">3</span></span>
+              <span class="orbit-core">W<span id="orbit-week">3</span></span>
             </div>
           </div>
 
@@ -367,8 +375,8 @@
           <div class="page-intro">
             <div>
               <p class="eyebrow">DAILY ACCOUNTABILITY</p>
-              <h1 id="practice-plan-title">Two videos. Fourteen focused minutes.</h1>
-              <p id="practice-plan-description">Upload one practice video of at least 7 minutes in the morning and one in the evening. Your teacher reviews both.</p>
+              <h1 id="practice-plan-title">Two videos. 7 mins of focus.</h1>
+              <p id="practice-plan-description">Aim for 7 mins. Even a 1-minute practice can be submitted for review and earns partial progress points.</p>
             </div>
             <div class="streak-pill">
               <span class="status-dot"></span>
@@ -389,7 +397,7 @@
               <div class="upload-heading">
                 <div>
                   <p class="eyebrow">MORNING</p>
-                  <h2 id="morning-practice-requirement">Minimum 7-minute practice</h2>
+                  <h2 id="morning-practice-requirement">7-minute focus goal</h2>
                 </div>
                 <span class="upload-status is-reviewed" id="morning-status-badge">Reviewed</span>
               </div>
@@ -413,7 +421,7 @@
               <div class="upload-heading">
                 <div>
                   <p class="eyebrow">EVENING</p>
-                  <h2 id="evening-practice-requirement">Minimum 7-minute practice</h2>
+                  <h2 id="evening-practice-requirement">7-minute focus goal</h2>
                 </div>
                 <span class="upload-status" id="evening-status-badge">Due today</span>
               </div>
@@ -650,6 +658,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>

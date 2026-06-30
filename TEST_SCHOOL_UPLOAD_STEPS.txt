@@ -1,0 +1,51 @@
+TEST SCHOOL GITHUB UPLOAD PACKAGE
+
+Use this folder for a new GitHub test repo.
+
+Recommended repo name:
+test-school
+
+Upload the CONTENTS of this folder to the root of the new GitHub repo.
+Do not upload this folder itself.
+
+Files/folders expected in the repo:
+- admin
+- admin.css
+- admin.html
+- admin.js
+- app.js
+- icon.svg
+- index.html
+- manifest.webmanifest
+- README.md
+- service-worker.js
+- styles.css
+- TEST_SCHOOL_UPLOAD_STEPS.txt
+
+GitHub Pages settings:
+1. Open the new repo on GitHub.
+2. Go to Settings > Pages.
+3. Source: Deploy from a branch.
+4. Branch: main.
+5. Folder: /(root).
+6. Save.
+
+Expected test URL:
+https://onthestreetsofchennai.github.io/test-school/
+
+What this test package connects to:
+- Frontend is hosted on GitHub Pages.
+- API/backend points to:
+  https://music-school-ots.sharoncornerstone56.workers.dev
+- That backend handles login, real database, admin, students, teacher review queue and OTP.
+
+Important for backend:
+Cloudflare Worker CORS must allow this GitHub Pages origin:
+https://onthestreetsofchennai.github.io
+
+I already updated the local Cloudflare worker source for this. Deploy the worker before testing GitHub Pages API calls.
+
+About Google Drive:
+Do not put Google Drive API keys or service account JSON in GitHub.
+Real Google Drive video storage must be connected only through the backend.
+This static GitHub upload package is ready for the frontend test, but Drive upload will become live only after the backend Drive integration is deployed.
