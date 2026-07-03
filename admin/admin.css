@@ -796,6 +796,22 @@ select[multiple] option,
   font-weight: 800;
 }
 
+.row-action.danger,
+.admin-button.danger {
+  border-color: rgba(255, 111, 145, 0.45);
+  background: rgba(255, 111, 145, 0.12);
+  color: #ff91a0;
+}
+
+.row-action.danger:hover,
+.row-action.danger:focus-visible,
+.admin-button.danger:hover,
+.admin-button.danger:focus-visible {
+  border-color: rgba(255, 111, 145, 0.82);
+  background: rgba(255, 111, 145, 0.2);
+  color: #ffd8de;
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1208,6 +1224,14 @@ select[multiple] option,
 
 .student-detail-page .student-modal-header {
   margin-bottom: 0;
+}
+
+.student-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .review-page-form {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "music-school-ots-v33-dashboard-quest-hero";
+const CACHE_NAME = "music-school-ots-v34-admin-remove-actions";
 const APP_ASSETS = [
   "./",
   "./index.html",
