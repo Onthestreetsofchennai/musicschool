@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#111426">
   <meta name="description" content="MUSIC SCHOOL OTS guided 12-week music learning app">
   <title>MUSIC SCHOOL OTS</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -185,14 +185,14 @@
               <span class="quest-kicker">TODAY'S QUEST</span>
               <h2>Unlock today's riff gate</h2>
               <div class="quest-pods" id="daily-quest-pods">
-                <div class="quest-pod" data-quest-pod="morning">
+                <button class="quest-pod" type="button" data-quest-pod="morning" data-checkin-period="morning">
                   <strong>Morning riff pod</strong>
                   <span id="morning-quest-status">Waiting for practice</span>
-                </div>
-                <div class="quest-pod" data-quest-pod="evening">
+                </button>
+                <button class="quest-pod" type="button" data-quest-pod="evening" data-checkin-period="evening">
                   <strong>Evening rhythm pod</strong>
                   <span id="evening-quest-status">Waiting for practice</span>
-                </div>
+                </button>
               </div>
             </article>
           </section>
@@ -200,8 +200,8 @@
           <section class="performer-journey-panel">
             <div class="journey-copy">
               <p class="journey-kicker">GUITAR CRASH COURSE JOURNEY</p>
-              <h2>Everyone is aiming to become a performer.</h2>
-              <p>Do not compete with others. See where you stand, celebrate the group progress, and keep moving one practice pod at a time.</p>
+              <h2 id="performer-title">Your week goal performer path.</h2>
+              <p id="performer-copy">Move one practice pod forward at a time. This path shows your weekly activity and the next stage you are working toward.</p>
             </div>
             <div class="journey-experience">
               <section class="speedometer-card" aria-label="Weekly activity speedometer">
@@ -237,7 +237,7 @@
                 <div class="roadmap-title-row">
                   <div>
                     <span>Performer Roadmap</span>
-                    <strong>Move your badge toward the final stage</strong>
+                    <strong id="roadmap-action-title">Move your badge through this week's goal</strong>
                   </div>
                   <button class="journey-cta" id="view-leaderboard-button" type="button">View leaderboard</button>
                 </div>
@@ -250,7 +250,7 @@
             <div class="hall-heading">
               <div>
                 <p class="journey-kicker">GUITAR HALL OF FAME</p>
-                <h2>Recent performers from your batch</h2>
+                <h2 id="hall-title">Recent performers from your batch</h2>
               </div>
               <span id="hall-week-copy">Week progress</span>
             </div>
@@ -658,6 +658,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="./app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

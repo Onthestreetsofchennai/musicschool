@@ -8,6 +8,7 @@ const API_ORIGIN = (() => {
   return WORKER_API_ORIGIN;
 })();
 const MIN_SUBMIT_PRACTICE_SECONDS = 60;
+const LEADERBOARD_MIN_STUDENTS = 30;
 
 const courseWeeks = [
   {
@@ -486,6 +487,17 @@ function navigate(viewName, bypassGate = false) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function openCheckinPeriod(period) {
+  navigate("checkin", true);
+  window.setTimeout(() => {
+    const card = document.querySelector(`.upload-card[data-period="${period}"]`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.classList.add("is-targeted");
+    window.setTimeout(() => card.classList.remove("is-targeted"), 1600);
+  }, 120);
+}
+
 function renderPracticeGate(forceVisible = false) {
   const gate = document.querySelector("#practice-gate");
   const appShell = document.querySelector("#app-shell");
@@ -505,7 +517,9 @@ function renderPracticeGate(forceVisible = false) {
 
 function calculateProgress() {
   const totalWeeks = Number(state.coursePlan?.totalWeeks || 12);
-  return Math.min(100, Math.round((state.completedWeeks.length / totalWeeks) * 100));
+  const completedProgress = Math.round((state.completedWeeks.length / totalWeeks) * 100);
+  const weekPositionProgress = Math.round((Math.max(0, Number(state.currentWeek || 1) - 1) / totalWeeks) * 100);
+  return Math.min(100, Math.max(completedProgress, weekPositionProgress));
 }
 
 function teacherIdentity() {
@@ -629,29 +643,85 @@ function renderGamification() {
     status.textContent = submitted[period] ? completeText : pendingText;
   });
 
-  const leaderboard = (state.leaderboard?.length ? state.leaderboard : [
-    { rank: 1, name: firstName, instrument: state.profile.instrument, current_week: state.currentWeek, weekly_submissions: 0, is_current_student: true },
-    { rank: 2, name: "Aarav", instrument: "Guitar", current_week: Math.max(1, state.currentWeek - 1), weekly_submissions: 6 },
-    { rank: 3, name: "Maya", instrument: "Guitar", current_week: Math.max(1, state.currentWeek - 1), weekly_submissions: 5 },
-    { rank: 4, name: "Rekha", instrument: "Guitar", current_week: Math.max(1, state.currentWeek - 2), weekly_submissions: 4 }
-  ]).map((student, index) => ({
+  const weeklyActivityTarget = 4;
+  const localPracticeCount = Number(submitted.morning) + Number(submitted.evening);
+  const rawLeaderboard = Array.isArray(state.leaderboard) ? state.leaderboard : [];
+  const leaderboardSource = rawLeaderboard.length ? rawLeaderboard : [
+    {
+      rank: 1,
+      name: firstName,
+      instrument: state.profile.instrument,
+      current_week: state.currentWeek,
+      weekly_submissions: localPracticeCount,
+      is_current_student: true
+    }
+  ];
+  const leaderboard = leaderboardSource.map((student, index) => ({
     ...student,
     rank: student.rank || index + 1,
     current_week: Number(student.current_week || student.currentWeek || 1),
     weekly_submissions: Number(student.weekly_submissions || 0)
   }));
+  if (!leaderboard.some((student) => student.is_current_student)) {
+    leaderboard.unshift({
+      rank: 1,
+      name: firstName,
+      instrument: state.profile.instrument,
+      current_week: state.currentWeek,
+      weekly_submissions: localPracticeCount,
+      is_current_student: true
+    });
+  }
 
   const initialFor = (student) => String(student.name || "S").trim().charAt(0).toUpperCase() || "S";
   const currentStudent = leaderboard.find((student) => student.is_current_student);
   const totalPods = leaderboard.reduce((sum, student) => sum + student.weekly_submissions, 0);
   const groupActive = leaderboard.filter((student) => student.weekly_submissions > 0).length || leaderboard.length;
+  const leaderboardReady = leaderboard.length >= LEADERBOARD_MIN_STUDENTS;
+  const performerPanel = document.querySelector(".performer-journey-panel");
+  const hallPanel = document.querySelector(".hall-panel");
+  const hallTitle = document.querySelector("#hall-title");
+  const leaderboardButton = document.querySelector("#view-leaderboard-button");
+  const performerTitle = document.querySelector("#performer-title");
+  const performerCopy = document.querySelector("#performer-copy");
+  const roadmapActionTitle = document.querySelector("#roadmap-action-title");
+  if (performerPanel) {
+    performerPanel.hidden = false;
+    performerPanel.classList.toggle("is-personal-mode", !leaderboardReady);
+  }
+  if (hallPanel) hallPanel.hidden = !leaderboardReady;
+  if (performerTitle) {
+    performerTitle.textContent = leaderboardReady
+      ? "Everyone is aiming to become a performer."
+      : "Your week goal performer path.";
+  }
+  if (performerCopy) {
+    performerCopy.textContent = leaderboardReady
+      ? "Do not compete with others. See where you stand, celebrate the group progress, and keep moving one practice pod at a time."
+      : "Move one practice pod forward at a time. This path shows your weekly activity and the next stage you are working toward.";
+  }
+  if (roadmapActionTitle) {
+    roadmapActionTitle.textContent = leaderboardReady
+      ? "Move your badge toward the final stage"
+      : "Move your badge through this week's goal";
+  }
+  if (hallTitle) {
+    hallTitle.textContent = "Recent performers from your batch";
+  }
+  if (leaderboardButton) {
+    leaderboardButton.hidden = !leaderboardReady;
+    leaderboardButton.dataset.leaderboardReady = leaderboardReady ? "true" : "false";
+    leaderboardButton.classList.toggle("is-locked", !leaderboardReady);
+    leaderboardButton.textContent = leaderboardReady ? "View leaderboard" : "";
+    leaderboardButton.setAttribute("aria-disabled", leaderboardReady ? "false" : "true");
+  }
   document.querySelector("#group-active-count").textContent = groupActive;
   document.querySelector("#your-journey-rank").textContent = currentStudent ? `#${currentStudent.rank}` : "--";
   document.querySelector("#group-pods-count").textContent = totalPods;
-  document.querySelector("#hall-week-copy").textContent = `${leaderboard.length} learners on the path`;
+  if (leaderboardReady) {
+    document.querySelector("#hall-week-copy").textContent = `${leaderboard.length} learners on the path`;
+  }
 
-  const weeklyActivityTarget = 4;
-  const localPracticeCount = Number(submitted.morning) + Number(submitted.evening);
   const currentWeeklySubmissions = currentStudent ? currentStudent.weekly_submissions : localPracticeCount;
   const weeklyActivityCount = Math.min(weeklyActivityTarget, Math.max(localPracticeCount, currentWeeklySubmissions));
   const weeklyActivityPercent = Math.round((weeklyActivityCount / weeklyActivityTarget) * 100);
@@ -670,22 +740,23 @@ function renderGamification() {
     <span class="${index < weeklyActivityCount ? "is-complete" : ""} ${index === weeklyActivityCount ? "is-current" : ""}"></span>
   `).join("");
 
-  document.querySelector("#hall-of-fame-list").innerHTML = leaderboard.slice(0, 3).map((student, index) => `
-    <article class="fame-card ${student.is_current_student ? "is-you" : ""}">
-      <span class="fame-ring">${initialFor(student)}</span>
-      <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
-      <small>Week ${student.current_week} - ${student.weekly_submissions}/14 pods</small>
-      <em>${index === 0 ? "Lead performer" : index === 1 ? "Steady mover" : "Rising player"}</em>
-    </article>
-  `).join("");
-
-  const maxWeek = Math.max(4, ...leaderboard.map((student) => student.current_week));
+  const roadmapStudents = leaderboardReady
+    ? leaderboard
+    : [currentStudent || {
+      rank: 1,
+      name: firstName,
+      instrument: state.profile.instrument,
+      current_week: state.currentWeek,
+      weekly_submissions: localPracticeCount,
+      is_current_student: true
+    }];
+  const maxWeek = Math.max(4, ...roadmapStudents.map((student) => student.current_week));
   const roadmapEnd = Math.max(4, Math.min(12, Math.max(maxWeek, state.currentWeek)));
   const roadmapStart = Math.max(1, roadmapEnd - 3);
   const roadmapWeeks = Array.from({ length: Math.min(4, roadmapEnd - roadmapStart + 1) }, (_, index) => roadmapStart + index);
   const roadColors = ["is-orange", "is-blue", "is-pink", "is-green"];
   document.querySelector("#performer-map").innerHTML = roadmapWeeks.map((week, index) => {
-    const students = leaderboard.filter((student) => student.current_week === week);
+    const students = roadmapStudents.filter((student) => student.current_week === week);
     const visible = students.slice(0, 3);
     const weekScore = students.reduce((sum, student) => sum + student.weekly_submissions, 0);
     return `
@@ -707,7 +778,26 @@ function renderGamification() {
     `;
   }).join("");
 
-  document.querySelector("#weekly-progress-list").innerHTML = Array.from({ length: Math.min(maxWeek, 8) }, (_, index) => {
+  const fameList = document.querySelector("#hall-of-fame-list");
+  const weeklyProgressList = document.querySelector("#weekly-progress-list");
+  const leaderboardList = document.querySelector("#leaderboard-list");
+  if (!leaderboardReady) {
+    fameList.innerHTML = "";
+    weeklyProgressList.innerHTML = "";
+    leaderboardList.innerHTML = "";
+    return;
+  }
+
+  fameList.innerHTML = leaderboard.slice(0, 3).map((student, index) => `
+    <article class="fame-card ${student.is_current_student ? "is-you" : ""}">
+      <span class="fame-ring">${initialFor(student)}</span>
+      <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
+      <small>Week ${student.current_week} - ${student.weekly_submissions}/14 pods</small>
+      <em>${index === 0 ? "Lead performer" : index === 1 ? "Steady mover" : "Rising player"}</em>
+    </article>
+  `).join("");
+
+  weeklyProgressList.innerHTML = Array.from({ length: Math.min(maxWeek, 8) }, (_, index) => {
     const week = Math.min(maxWeek, 8) - index;
     const students = leaderboard.filter((student) => student.current_week === week);
     const visible = students.slice(0, 3);
@@ -722,7 +812,7 @@ function renderGamification() {
     `;
   }).join("");
 
-  document.querySelector("#leaderboard-list").innerHTML = leaderboard.slice(0, 10).map((student) => `
+  leaderboardList.innerHTML = leaderboard.slice(0, 10).map((student) => `
     <article class="leaderboard-row ${student.is_current_student ? "is-you" : ""}">
       <span class="leaderboard-rank">${student.rank}</span>
       <div>
@@ -1341,7 +1431,16 @@ function bindEvents() {
     button.addEventListener("click", () => navigate(button.dataset.view));
   });
 
+  document.querySelectorAll("[data-checkin-period]").forEach((button) => {
+    button.addEventListener("click", () => openCheckinPeriod(button.dataset.checkinPeriod));
+  });
+
   document.querySelector("#view-leaderboard-button")?.addEventListener("click", () => {
+    const button = document.querySelector("#view-leaderboard-button");
+    if (button?.dataset.leaderboardReady !== "true") {
+      showToast(`Leaderboard opens when the batch reaches ${LEADERBOARD_MIN_STUDENTS} learners. Until then, your dashboard stays focused on your own progress.`);
+      return;
+    }
     document.querySelector("#leaderboard-list")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 
@@ -1406,9 +1505,7 @@ function bindEvents() {
 
   document.querySelector("#practice-gate-upload").addEventListener("click", () => {
     document.querySelector("#practice-gate").hidden = true;
-    navigate("checkin", true);
-    const input = document.querySelector(`[data-upload-input="${state.practiceGate.activePeriod || "morning"}"]`);
-    input?.closest(".upload-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    openCheckinPeriod(state.practiceGate.activePeriod || "morning");
   });
 
   document.querySelector("#practice-gate-snooze").addEventListener("click", () => {
@@ -1549,7 +1646,7 @@ async function init() {
   }
 
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+    navigator.serviceWorker.register("service-worker.js").catch(() => {});
   }
 }
 
