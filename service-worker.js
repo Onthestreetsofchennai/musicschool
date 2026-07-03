@@ -1,11 +1,15 @@
-const CACHE_NAME = "music-school-ots-v34-admin-remove-actions";
+const CACHE_NAME = "music-school-ots-v35-ots-logo-icons";
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
-  "./icon.svg"
+  "./favicon-16x16.png",
+  "./favicon-32x32.png",
+  "./apple-touch-icon.png",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
