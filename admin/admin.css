@@ -98,10 +98,15 @@ button {
   height: 44px;
   place-items: center;
   border-radius: 15px;
-  background: var(--purple);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 900;
+  overflow: hidden;
+  background: #e5f7f8;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 14px 30px rgba(112, 87, 255, 0.2);
+}
+
+.brand-mark img {
+  width: 86%;
+  height: 86%;
+  object-fit: contain;
 }
 
 .login-copy {
@@ -303,6 +308,11 @@ select[multiple] option,
   background: var(--background);
 }
 
+.course-week-card.is-highlighted {
+  border-color: rgba(112, 87, 255, 0.75);
+  box-shadow: 0 0 0 4px rgba(112, 87, 255, 0.14), var(--shadow);
+}
+
 .course-week-card > strong {
   color: var(--purple);
 }
@@ -478,10 +488,17 @@ select[multiple] option,
   height: 42px;
   place-items: center;
   border-radius: 50%;
-  background: var(--navy);
+  overflow: hidden;
+  background: #e5f7f8;
   color: white;
   font-size: 0.75rem;
   font-weight: 900;
+}
+
+.admin-avatar img {
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
 }
 
 .logout-button {
@@ -786,6 +803,9 @@ select[multiple] option,
 }
 
 .row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -794,6 +814,13 @@ select[multiple] option,
   color: var(--navy);
   font-size: 0.72rem;
   font-weight: 800;
+  text-decoration: none;
+}
+
+.session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .row-action.danger,
@@ -1104,6 +1131,52 @@ select[multiple] option,
 
 .detail-block h3 {
   margin: 0 0 15px;
+}
+
+.detail-block-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.detail-block-header h3 {
+  margin-bottom: 7px;
+}
+
+.teacher-notes-detail {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(circle at 95% 10%, rgba(112, 87, 255, 0.14), transparent 32%),
+    var(--surface);
+}
+
+.teacher-notes-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--purple-pale);
+}
+
+.teacher-notes-preview span {
+  color: var(--purple);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.teacher-notes-preview strong,
+.teacher-notes-preview p {
+  margin: 0;
+}
+
+.teacher-notes-preview p {
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .skill-list {

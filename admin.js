@@ -14,6 +14,7 @@ let enrollmentTeachers = [];
 let adminStudents = [];
 let adminSessions = [];
 let activeCoursePlan = null;
+let pendingCoursePlanFocus = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -33,6 +34,20 @@ function formatDateTime(value) {
     hour: "numeric",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function liveClassroomUrl(roomName) {
+  const safeRoom = `ots-music-school-${roomName || "classroom"}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+  return `https://meet.jit.si/${safeRoom}#config.prejoinPageEnabled=false`;
+}
+
+function sessionRoomName(session) {
+  return session.meeting_room || `session-${session.id}`;
+}
+
+function assetUrl(path) {
+  const adminPath = window.location.pathname.includes("/admin");
+  return new URL(adminPath ? `../${path}` : path, window.location.href).href;
 }
 
 function showToast(message) {
@@ -224,6 +239,7 @@ async function loadDashboard() {
         <span>${formatDateTime(session.scheduled_at)}</span>
         <strong>${escapeHtml(session.student_name)}</strong>
         <small>${escapeHtml(session.topic)} · ${escapeHtml(session.teacher_name)}</small>
+        <a class="row-action" href="${liveClassroomUrl(sessionRoomName(session))}" target="_blank" rel="noopener">Join classroom</a>
       </article>
     `).join("")
     : '<div class="empty-state">No upcoming sessions.</div>';
@@ -253,10 +269,43 @@ async function loadStudents() {
         <td>${scoreBar(student.attendance_score)}</td>
         <td>${scoreBar(student.skill_score)}</td>
         <td>${statusBadge(student.status, student.overall_score)}</td>
-        <td><button class="row-action open-student" data-student-id="${student.id}">Open 360°</button></td>
+        <td class="row-actions">
+          <button class="row-action open-student" data-student-id="${student.id}">Open 360°</button>
+          ${canRemoveStudents() ? `
+            <button
+              class="row-action danger remove-student"
+              data-student-id="${student.id}"
+              data-student-name="${escapeHtml(student.name)}"
+            >Remove</button>
+          ` : ""}
+        </td>
       </tr>
     `).join("")
     : '<tr><td colspan="8"><div class="empty-state">No students match these filters.</div></td></tr>';
+}
+
+async function removeStudent(button) {
+  if (!canRemoveStudents()) return;
+  const studentId = Number(button.dataset.studentId);
+  const name = button.dataset.studentName || "this student";
+  const confirmed = window.confirm(`Remove ${name}?\n\nThis will stop student login and hide the student from active lists. Practice history stays saved for records.`);
+  if (!confirmed) return;
+  button.disabled = true;
+  try {
+    await api(`/api/students/${studentId}`, {
+      method: "DELETE",
+      body: "{}"
+    });
+    adminStudents = [];
+    await Promise.all([loadStudents(), loadDashboard()]);
+    if (document.querySelector("#admin-view-student-detail")?.classList.contains("is-active")) {
+      navigateAdmin("students");
+    }
+    showToast(`${name} removed from active students.`);
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
 }
 
 async function openCreateStudent() {
@@ -320,6 +369,18 @@ function roleLabel(role) {
   return String(role || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function canRemoveStudents() {
+  return ["super_admin", "academic_head", "operations"].includes(adminUser?.role);
+}
+
+function canManageTeacherAssignments() {
+  return ["super_admin", "academic_head", "operations"].includes(adminUser?.role);
+}
+
+function canRemoveStaff() {
+  return adminUser?.role === "super_admin";
+}
+
 async function loadStaff() {
   const data = await api("/api/staff");
   document.querySelector("#staff-table-body").innerHTML = data.staff.length
@@ -346,6 +407,14 @@ async function loadStaff() {
             data-staff-id="${member.id}"
             data-next-active="${member.active ? "false" : "true"}"
           >${member.active ? "Deactivate" : "Activate"}</button>
+          ${canRemoveStaff() && Number(member.id) !== Number(adminUser?.userId) ? `
+            <button
+              class="row-action danger remove-staff"
+              data-staff-id="${member.id}"
+              data-staff-name="${escapeHtml(member.name)}"
+              data-staff-role="${escapeHtml(roleLabel(member.role))}"
+            >Remove</button>
+          ` : ""}
         </td>
       </tr>
     `).join("")
@@ -415,6 +484,29 @@ async function toggleStaffStatus(button) {
   }
 }
 
+async function removeStaff(button) {
+  if (!canRemoveStaff()) return;
+  const staffId = Number(button.dataset.staffId);
+  const name = button.dataset.staffName || "this staff account";
+  const role = button.dataset.staffRole || "staff";
+  const confirmed = window.confirm(`Remove ${name} (${role})?\n\nThis will remove portal access and sign them out. Teachers must have zero assigned active students before removal.`);
+  if (!confirmed) return;
+  button.disabled = true;
+  try {
+    await api(`/api/staff/${staffId}`, {
+      method: "DELETE",
+      body: "{}"
+    });
+    await loadStaff();
+    enrollmentTeachers = [];
+    adminStudents = [];
+    showToast(`${name} removed from staff access.`);
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
+}
+
 async function loadEditorStudents() {
   if (!adminStudents.length) {
     const data = await api("/api/students");
@@ -447,7 +539,12 @@ async function loadSessions() {
         <td>${escapeHtml(session.topic)}</td>
         <td>${formatDateTime(session.scheduled_at)}</td>
         <td><span class="status-pill ${session.status === "scheduled" || session.status === "attended" ? "green" : "amber"}">${escapeHtml(session.status)}</span></td>
-        <td><button class="row-action edit-session" data-session-id="${session.id}">Edit</button></td>
+        <td>
+          <div class="session-actions">
+            <a class="row-action" href="${liveClassroomUrl(sessionRoomName(session))}" target="_blank" rel="noopener">Join</a>
+            <button class="row-action edit-session" data-session-id="${session.id}">Edit</button>
+          </div>
+        </td>
       </tr>
     `).join("")
     : '<tr><td colspan="6"><div class="empty-state">No live sessions have been scheduled.</div></td></tr>';
@@ -514,10 +611,11 @@ async function saveSession(event) {
   }
 }
 
-async function loadCoursePlanStudents() {
+async function loadCoursePlanStudents(preferredStudentId = 0) {
   const students = await loadEditorStudents();
   const select = document.querySelector("#course-student-select");
   const previousId = Number(select.value || 0);
+  const desiredId = Number(preferredStudentId || pendingCoursePlanFocus?.studentId || previousId || 0);
   select.innerHTML = students.map((student) => (
     `<option value="${student.id}">${escapeHtml(student.name)} - ${escapeHtml(student.instrument)}</option>`
   )).join("");
@@ -526,7 +624,7 @@ async function loadCoursePlanStudents() {
     return;
   }
   document.querySelector("#course-plan-form").hidden = false;
-  select.value = students.some((student) => student.id === previousId) ? previousId : students[0].id;
+  select.value = students.some((student) => Number(student.id) === desiredId) ? desiredId : students[0].id;
   await loadCoursePlan(Number(select.value));
 }
 
@@ -539,6 +637,50 @@ async function loadCoursePlan(studentId) {
   document.querySelector("#course-morning-required").checked = activeCoursePlan.morning_required;
   document.querySelector("#course-evening-required").checked = activeCoursePlan.evening_required;
   renderCourseWeekEditor();
+  focusPendingCoursePlanField();
+}
+
+function currentCourseWeek(student, coursePlan) {
+  const totalWeeks = Number(coursePlan?.total_weeks || coursePlan?.totalWeeks || 12);
+  return Math.max(1, Math.min(totalWeeks, Number(student.current_week || 1)));
+}
+
+function courseWeekByNumber(coursePlan, weekNumber) {
+  const weeks = coursePlan?.weeks || [];
+  return weeks.find((week) => Number(week.week_number || week.weekNumber) === Number(weekNumber)) ||
+    weeks[weekNumber - 1] ||
+    {};
+}
+
+function studentWeekNotesSummary(student, coursePlan) {
+  const weekNumber = currentCourseWeek(student, coursePlan);
+  const week = courseWeekByNumber(coursePlan, weekNumber);
+  return {
+    weekNumber,
+    goal: week.weekly_goal || week.weeklyGoal || week.milestone || week.title || "No weekly goal added yet.",
+    notes: week.teacher_notes || week.teacherNotes || ""
+  };
+}
+
+function focusPendingCoursePlanField() {
+  if (!pendingCoursePlanFocus) return;
+  const selectedStudentId = Number(document.querySelector("#course-student-select")?.value || 0);
+  if (selectedStudentId !== Number(pendingCoursePlanFocus.studentId)) return;
+  const weekNumber = Number(pendingCoursePlanFocus.weekNumber || 1);
+  const card = document.querySelector(`[data-course-week="${weekNumber}"]`);
+  const field = card?.querySelector('[data-week-field="teacherNotes"]');
+  if (!field) return;
+  card.classList.add("is-highlighted");
+  field.focus();
+  field.scrollIntoView({ behavior: "smooth", block: "center" });
+  showToast(`Add notes for Week ${weekNumber}, then save the student course plan.`);
+  window.setTimeout(() => card.classList.remove("is-highlighted"), 3600);
+  pendingCoursePlanFocus = null;
+}
+
+function openCourseNotesEditor(studentId, weekNumber) {
+  pendingCoursePlanFocus = { studentId, weekNumber };
+  navigateAdmin("courses");
 }
 
 function renderCourseWeekEditor() {
@@ -547,9 +689,12 @@ function renderCourseWeekEditor() {
   const weeks = Array.from({ length: totalWeeks }, (_, index) => activeCoursePlan.weeks?.[index] || {
     title: `Week ${index + 1}`,
     focus: "",
+    weekly_goal: "",
+    target_pods: 4,
     milestone: "",
     lessons: [],
-    practice_instructions: ""
+    practice_instructions: "",
+    teacher_notes: ""
   });
   document.querySelector("#course-week-editor").innerHTML = weeks.map((week, index) => `
     <article class="course-week-card" data-course-week="${index + 1}">
@@ -557,6 +702,14 @@ function renderCourseWeekEditor() {
       <label>
         Week title
         <input data-week-field="title" value="${escapeHtml(week.title || "")}" required>
+      </label>
+      <label>
+        Week goal shown on student dashboard
+        <textarea data-week-field="weeklyGoal" rows="2">${escapeHtml(week.weekly_goal || week.weeklyGoal || week.milestone || "")}</textarea>
+      </label>
+      <label>
+        Target practice pods this week
+        <input data-week-field="targetPods" type="number" min="1" max="28" value="${escapeHtml(week.target_pods || week.targetPods || 4)}">
       </label>
       <label>
         Focus
@@ -574,6 +727,10 @@ function renderCourseWeekEditor() {
         Daily practice instruction
         <textarea data-week-field="practiceInstructions" rows="2">${escapeHtml(week.practice_instructions || week.practiceInstructions || "")}</textarea>
       </label>
+      <label>
+        Notes box for student
+        <textarea data-week-field="teacherNotes" rows="3" placeholder="Example: Slow chord changes today. Keep wrist relaxed.">${escapeHtml(week.teacher_notes || week.teacherNotes || "")}</textarea>
+      </label>
     </article>
   `).join("");
 }
@@ -586,10 +743,13 @@ async function saveCoursePlan(event) {
   const studentId = Number(document.querySelector("#course-student-select").value);
   const weeks = [...document.querySelectorAll("[data-course-week]")].map((card) => ({
     title: card.querySelector('[data-week-field="title"]').value.trim(),
+    weeklyGoal: card.querySelector('[data-week-field="weeklyGoal"]').value.trim(),
+    targetPods: Number(card.querySelector('[data-week-field="targetPods"]').value || 4),
     focus: card.querySelector('[data-week-field="focus"]').value.trim(),
     milestone: card.querySelector('[data-week-field="milestone"]').value.trim(),
     lessons: card.querySelector('[data-week-field="lessons"]').value.split("\n").map((item) => item.trim()).filter(Boolean),
-    practiceInstructions: card.querySelector('[data-week-field="practiceInstructions"]').value.trim()
+    practiceInstructions: card.querySelector('[data-week-field="practiceInstructions"]').value.trim(),
+    teacherNotes: card.querySelector('[data-week-field="teacherNotes"]').value.trim()
   }));
   error.hidden = true;
   submitButton.disabled = true;
@@ -685,9 +845,10 @@ function scoreBar(score) {
 
 async function openStudent(studentId) {
   const data = await api(`/api/students/${studentId}`);
-  await ensureEnrollmentTeachers();
+  if (canManageTeacherAssignments()) await ensureEnrollmentTeachers();
   const student = data.student;
   const assignedTeacherIds = teacherIdListFromValue(student.teacher_ids || student.teacher_id);
+  const notesSummary = studentWeekNotesSummary(student, data.coursePlan);
   const skills = data.latestSkills || {};
   const scoreCards = [
     ["Practice consistency", student.practice_score],
@@ -724,7 +885,17 @@ async function openStudent(studentId) {
           <p>${escapeHtml(student.instrument)} · Week ${student.current_week} of 12 · Teacher ${escapeHtml(student.teacher_name)}</p>
         </div>
       </div>
-      <div class="large-score ${escapeHtml(student.analysis_status)}">${Math.round(student.overall_score || 0)}</div>
+      <div class="student-header-actions">
+        <div class="large-score ${escapeHtml(student.analysis_status)}">${Math.round(student.overall_score || 0)}</div>
+        ${canRemoveStudents() ? `
+          <button
+            class="admin-button danger remove-student"
+            data-student-id="${student.id}"
+            data-student-name="${escapeHtml(student.name)}"
+            type="button"
+          >Remove student</button>
+        ` : ""}
+      </div>
     </header>
     <div class="analysis-score-grid">
       ${scoreCards.map(([label, score]) => `
@@ -756,7 +927,27 @@ async function openStudent(studentId) {
           <div class="detail-list-row"><span>Course start</span><strong>${escapeHtml(student.course_start_date)}</strong></div>
         </div>
       </section>
-      <section class="detail-block teacher-assignment-block">
+      <section class="detail-block teacher-notes-detail">
+        <div class="detail-block-header">
+          <div>
+            <h3>Teacher notes for student</h3>
+            <p class="field-hint">This note appears on the student's dashboard for Week ${notesSummary.weekNumber}.</p>
+          </div>
+          <button
+            class="admin-button primary edit-student-notes"
+            data-student-id="${student.id}"
+            data-week-number="${notesSummary.weekNumber}"
+            type="button"
+          >Edit week goal and notes</button>
+        </div>
+        <div class="teacher-notes-preview">
+          <span>Week ${notesSummary.weekNumber} goal</span>
+          <strong>${escapeHtml(notesSummary.goal)}</strong>
+          <span>Visible student note</span>
+          <p>${escapeHtml(notesSummary.notes || "No teacher note added yet. Click edit to add one for this student.")}</p>
+        </div>
+      </section>
+      ${canManageTeacherAssignments() ? `<section class="detail-block teacher-assignment-block">
         <h3>Teacher assignment</h3>
         <p class="field-hint">Choose up to 3 teachers. The first selected teacher stays primary for reviews and live sessions.</p>
         <select class="teacher-assignment-select" data-student-teacher-select="${student.id}" multiple size="5">
@@ -765,7 +956,7 @@ async function openStudent(studentId) {
           `).join("")}
         </select>
         <button class="admin-button primary save-student-teachers" data-student-id="${student.id}" type="button">Save teachers</button>
-      </section>
+      </section>` : ""}
       <section class="detail-block">
         <h3>Active alerts</h3>
         <div class="detail-list">${alertsHtml}</div>
@@ -1016,6 +1207,12 @@ function bindEvents() {
     const saveTeachersButton = event.target.closest(".save-student-teachers");
     if (saveTeachersButton) await saveStudentTeachers(Number(saveTeachersButton.dataset.studentId));
 
+    const notesButton = event.target.closest(".edit-student-notes");
+    if (notesButton) openCourseNotesEditor(Number(notesButton.dataset.studentId), Number(notesButton.dataset.weekNumber));
+
+    const removeStudentButton = event.target.closest(".remove-student");
+    if (removeStudentButton) await removeStudent(removeStudentButton);
+
     const reviewButton = event.target.closest(".open-review");
     if (reviewButton) await openReview(reviewButton);
 
@@ -1027,6 +1224,9 @@ function bindEvents() {
 
     const staffPasswordButton = event.target.closest(".reset-staff-password");
     if (staffPasswordButton) openResetPassword(staffPasswordButton);
+
+    const removeStaffButton = event.target.closest(".remove-staff");
+    if (removeStaffButton) await removeStaff(removeStaffButton);
 
     const sessionButton = event.target.closest(".edit-session");
     if (sessionButton) {
@@ -1040,7 +1240,8 @@ function renderAdminUser() {
   if (!adminUser) return;
   document.querySelector("#admin-user-name").textContent = adminUser.name;
   document.querySelector("#admin-user-role").textContent = adminUser.role.replaceAll("_", " ");
-  document.querySelector("#admin-avatar").textContent = initials(adminUser.name);
+  document.querySelector("#admin-avatar").innerHTML = `<img src="${assetUrl("brand-logo-transparent.png")}" alt="On The Streets">`;
+  document.querySelector("#admin-avatar").title = initials(adminUser.name);
   document.querySelector("#open-create-student").hidden = adminUser.role === "teacher";
   document.querySelector("#staff-nav-item").hidden = adminUser.role !== "super_admin";
   document.querySelector(".admin-brand small").textContent = adminUser.role === "teacher"

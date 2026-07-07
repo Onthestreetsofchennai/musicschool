@@ -185,6 +185,7 @@ let selectedHelpSlot = null;
 let toastTimer;
 const temporaryVideoUrls = {};
 const selectedPracticeFiles = {};
+const uploadProgress = {};
 let backendFeedback = null;
 let backendConnected = false;
 let classroomStream = null;
@@ -228,7 +229,43 @@ function apiEndpoint(path) {
   return /^https?:\/\//i.test(String(path || "")) ? path : `${API_ORIGIN}${path}`;
 }
 
-async function uploadPracticeVideoIfAvailable(period, file) {
+function uploadVideoWithProgress(url, file, onProgress = () => {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", apiEndpoint(url));
+    if (studentToken) xhr.setRequestHeader("Authorization", `Bearer ${studentToken}`);
+    xhr.setRequestHeader("Content-Type", file.type || "video/webm");
+
+    xhr.upload.onloadstart = () => onProgress({ percent: 2, label: "Preparing secure upload..." });
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        onProgress({ percent: 15, label: "Uploading video..." });
+        return;
+      }
+      const percent = Math.max(3, Math.min(96, Math.round((event.loaded / event.total) * 96)));
+      onProgress({ percent, label: `Uploading video ${percent}%` });
+    };
+    xhr.upload.onload = () => onProgress({ percent: 98, label: "Saving video to Drive..." });
+    xhr.onerror = () => reject(new Error("Video upload could not reach the school server. Please try again with a shorter video or refresh the app once."));
+    xhr.onload = () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(xhr.responseText || "{}");
+      } catch {
+        reject(new Error("The school server replied with an unreadable upload response. Please try again."));
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload);
+        return;
+      }
+      reject(new Error(payload.error || "The practice video could not be uploaded."));
+    };
+    xhr.send(file);
+  });
+}
+
+async function uploadPracticeVideoIfAvailable(period, file, onProgress = () => {}) {
   if (!file) return { storageMode: "metadata-only-mvp", storageKey: "" };
   let config;
   try {
@@ -252,24 +289,12 @@ async function uploadPracticeVideoIfAvailable(period, file) {
     throw new Error(`This video is too large for upload. Please record a shorter practice clip under ${config.maxFileSizeMb || 95} MB.`);
   }
 
-  let response;
   try {
-    response = await fetch(apiEndpoint(config.uploadUrl), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${studentToken}`,
-        "Content-Type": file.type || "video/webm"
-      },
-      body: file
-    });
+    return await uploadVideoWithProgress(config.uploadUrl, file, onProgress);
   } catch (error) {
-    throw new Error("Video upload could not reach the school server. Please try again with a shorter video or refresh the app once.");
+    if (error.message.includes("practice video") || error.message.includes("school server")) throw error;
+    throw new Error(error.message || "The practice video could not be uploaded.");
   }
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || "The practice video could not be uploaded.");
-  }
-  return payload;
 }
 
 function clearStudentSession() {
@@ -446,6 +471,36 @@ function practiceDurationNote(durationSeconds, targetSeconds) {
   return `Short practice accepted: ${formatPracticeDuration(duration)} uploaded. Aim for ${targetMinutes} mins for full progress points.`;
 }
 
+function setUploadProgress(period, percent, label) {
+  const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  const current = uploadProgress[period];
+  if (current && current.percent === safePercent && current.label === label) return;
+  uploadProgress[period] = { percent: safePercent, label };
+  renderCheckins();
+}
+
+function clearUploadProgress(period) {
+  if (!uploadProgress[period]) return;
+  delete uploadProgress[period];
+  renderCheckins();
+}
+
+function uploadProgressHtml(period) {
+  const progress = uploadProgress[period];
+  if (!progress) return "";
+  const percent = Math.max(0, Math.min(100, Math.round(progress.percent)));
+  return `
+    <div class="upload-progress" role="status" aria-live="polite">
+      <div class="upload-progress-row">
+        <strong>${escapeHtml(progress.label)}</strong>
+        <span>${percent}%</span>
+      </div>
+      <div class="upload-progress-track"><span style="width: ${percent}%"></span></div>
+      <small>Keep this page open until the upload completes.</small>
+    </div>
+  `;
+}
+
 function showToast(message) {
   const toast = document.querySelector("#toast");
   toast.textContent = message;
@@ -522,6 +577,51 @@ function calculateProgress() {
   return Math.min(100, Math.max(completedProgress, weekPositionProgress));
 }
 
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, Number.isFinite(Number(value)) ? Number(value) : min));
+}
+
+function currentWeekPlan() {
+  const plan = state.coursePlan || defaultState.coursePlan;
+  const weeks = plan.weeks?.length ? plan.weeks : courseWeeks;
+  const weekNumber = Math.max(1, Number(state.currentWeek || 1));
+  const week = weeks[weekNumber - 1] || weeks[0] || {};
+  const weeklyGoal = week.weekly_goal || week.weeklyGoal || week.milestone || week.title || "Complete this week's practice goal.";
+  const teacherNotes = week.teacher_notes || week.teacherNotes || week.practice_instructions || week.practiceInstructions || "";
+  return {
+    ...week,
+    weekNumber,
+    weeklyGoal,
+    teacherNotes,
+    targetPods: clampNumber(week.target_pods || week.targetPods || 4, 1, 28)
+  };
+}
+
+function periodSubmitted(period) {
+  return ["submitted", "reviewed"].includes(state.checkins?.[period]?.status);
+}
+
+function weeklyGoalSummary() {
+  const week = currentWeekPlan();
+  const targetPods = week.targetPods;
+  const currentWeek = Number(state.currentWeek || 1);
+  const submissionKeys = new Set();
+  (state.recentSubmissions || []).forEach((submission) => {
+    if (Number(submission.course_week || currentWeek) !== currentWeek) return;
+    if (!["pending", "reviewed"].includes(String(submission.review_status || "pending"))) return;
+    submissionKeys.add(submission.id || `${submission.period}-${submission.uploaded_at}`);
+  });
+  const todayCount = ["morning", "evening"].filter(periodSubmitted).length;
+  const completedPods = Math.min(targetPods, Math.max(submissionKeys.size, todayCount));
+  const percent = Math.min(100, Math.round((completedPods / targetPods) * 100));
+  return {
+    week,
+    targetPods,
+    completedPods,
+    percent
+  };
+}
+
 function teacherIdentity() {
   const fullName = state.profile.teacherName || "Your teacher";
   if (fullName === "Your teacher") {
@@ -555,7 +655,7 @@ function renderTeacherIdentity() {
 }
 
 function renderHome() {
-  const progress = calculateProgress();
+  const goalSummary = weeklyGoalSummary();
   const name = state.profile.name || "Student";
   const initial = name.trim().charAt(0).toUpperCase() || "S";
   const morningSubmitted = ["submitted", "reviewed"].includes(state.checkins.morning.status);
@@ -570,8 +670,18 @@ function renderHome() {
   if (heroInstrument) heroInstrument.textContent = state.profile.instrument.toUpperCase();
   document.querySelector("#hero-week").textContent = state.currentWeek;
   document.querySelector("#orbit-week").textContent = state.currentWeek;
-  document.querySelector("#hero-progress-text").textContent = `${progress}%`;
-  document.querySelector("#hero-progress-bar").style.width = `${progress}%`;
+  document.querySelector("#hero-goal").textContent = goalSummary.week.weeklyGoal;
+  document.querySelector("#hero-progress-text").textContent = `${goalSummary.percent}%`;
+  document.querySelector("#hero-progress-bar").style.width = `${goalSummary.percent}%`;
+  document.querySelector("#dashboard-week-goal").textContent = goalSummary.week.weeklyGoal;
+  document.querySelector("#dashboard-week-focus").textContent = goalSummary.week.focus ||
+    `Week ${state.currentWeek} focus for ${state.profile.instrument}.`;
+  document.querySelector("#dashboard-week-progress-text").textContent = `${goalSummary.percent}%`;
+  document.querySelector("#dashboard-week-progress-bar").style.width = `${goalSummary.percent}%`;
+  document.querySelector("#dashboard-week-pods").textContent =
+    `${goalSummary.completedPods} of ${goalSummary.targetPods} practice pods completed`;
+  document.querySelector("#dashboard-teacher-notes").textContent = goalSummary.week.teacherNotes ||
+    "Your teacher will add personal notes here for this week's practice.";
   document.querySelector("#streak-count").textContent = state.streak;
   document.querySelector("#review-count").textContent = `${state.reviews} received`;
   document.querySelector("#avatar-button").textContent = initial;
@@ -604,7 +714,7 @@ function renderHome() {
             <h3>${session.topic}</h3>
             <p>${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(date)} with ${teacher.displayName}</p>
           </div>
-          <button class="button button-secondary join-session" data-room="session-${session.id}">Join classroom</button>
+          <button class="button button-secondary join-session" data-room="${escapeHtml(session.meeting_room || `session-${session.id}`)}">Join classroom</button>
         </article>
       `;
     }).join("")
@@ -615,6 +725,7 @@ function renderHome() {
 
 function renderGamification() {
   const firstName = (state.profile.name || "Student").trim().split(/\s+/)[0] || "Student";
+  const goalSummary = weeklyGoalSummary();
   const practiceMinutes = Number(state.coursePlan?.practiceMinutes || Math.round(state.practiceGate.minDurationSeconds / 60) || 7);
   const submitted = {
     morning: ["submitted", "reviewed"].includes(state.checkins.morning.status),
@@ -643,8 +754,8 @@ function renderGamification() {
     status.textContent = submitted[period] ? completeText : pendingText;
   });
 
-  const weeklyActivityTarget = 4;
-  const localPracticeCount = Number(submitted.morning) + Number(submitted.evening);
+  const weeklyActivityTarget = goalSummary.targetPods;
+  const localPracticeCount = goalSummary.completedPods;
   const rawLeaderboard = Array.isArray(state.leaderboard) ? state.leaderboard : [];
   const leaderboardSource = rawLeaderboard.length ? rawLeaderboard : [
     {
@@ -792,7 +903,7 @@ function renderGamification() {
     <article class="fame-card ${student.is_current_student ? "is-you" : ""}">
       <span class="fame-ring">${initialFor(student)}</span>
       <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
-      <small>Week ${student.current_week} - ${student.weekly_submissions}/14 pods</small>
+      <small>Week ${student.current_week} - ${student.weekly_submissions}/${weeklyActivityTarget} pods</small>
       <em>${index === 0 ? "Lead performer" : index === 1 ? "Steady mover" : "Rising player"}</em>
     </article>
   `).join("");
@@ -819,7 +930,7 @@ function renderGamification() {
         <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
         <small>${escapeHtml(student.instrument || "Guitar")} - Week ${student.current_week || 1}</small>
       </div>
-      <span class="leaderboard-score">${student.weekly_submissions || 0}/14 pods</span>
+      <span class="leaderboard-score">${student.weekly_submissions || 0}/${weeklyActivityTarget} pods</span>
     </article>
   `).join("");
 }
@@ -864,8 +975,11 @@ function renderCourse() {
             ${(week.lessons || []).map((lesson) => `<li>${escapeHtml(lesson)}</li>`).join("")}
           </ul>
           <div class="week-milestone">
-            <strong>Weekly milestone</strong>
-            <p>${escapeHtml(week.milestone)}</p>
+            <strong>Week goal</strong>
+            <p>${escapeHtml(week.weekly_goal || week.weeklyGoal || week.milestone)}</p>
+            <small>${escapeHtml(week.target_pods || week.targetPods || 4)} target practice pods this week</small>
+            ${week.teacher_notes || week.teacherNotes ? `<small class="week-teacher-note">Teacher notes: ${escapeHtml(week.teacher_notes || week.teacherNotes)}</small>` : ""}
+            ${week.milestone ? `<small>Milestone: ${escapeHtml(week.milestone)}</small>` : ""}
             ${week.practice_instructions || week.practiceInstructions ? `<small>${escapeHtml(week.practice_instructions || week.practiceInstructions)}</small>` : ""}
             ${action}
           </div>
@@ -896,10 +1010,13 @@ function renderCheckins() {
     const required = period === "morning" ? state.coursePlan?.morningRequired : state.coursePlan?.eveningRequired;
     const removeButton = document.querySelector(`[data-remove-upload="${period}"]`);
     const submitButton = document.querySelector(`[data-submit-upload="${period}"]`);
+    const progress = uploadProgress[period];
     document.querySelector(`[data-period="${period}"]`).hidden = !required;
     document.querySelector(`#${period}-practice-requirement`).textContent = `${practiceMinutes}-minute focus goal`;
     removeButton.hidden = checkin.status !== "submitted" || !checkin.id;
-    submitButton.hidden = checkin.status !== "selected";
+    submitButton.hidden = checkin.status !== "selected" && !progress;
+    submitButton.disabled = Boolean(progress);
+    submitButton.textContent = progress ? "Uploading..." : `Submit ${period} video`;
 
     badge.className = "upload-status";
     if (checkin.status === "reviewed") {
@@ -922,6 +1039,7 @@ function renderCheckins() {
         <strong>${escapeHtml(checkin.fileName || `${period}-practice.webm`)}</strong>
         <small>${duration ? `${formatPracticeDuration(duration)} selected` : "Video selected"}</small>
         ${warning ? `<small class="practice-duration-warning">${escapeHtml(warning)}</small>` : ""}
+        ${uploadProgressHtml(period)}
       `;
       preview.classList.remove("is-empty");
     } else if (checkin.fileName) {
@@ -932,6 +1050,7 @@ function renderCheckins() {
         <strong id="${period}-file-label">${escapeHtml(checkin.fileName)}</strong>
         <small id="${period}-upload-time">${checkin.time ? `Uploaded at ${escapeHtml(checkin.time)}` : "Video selected"}</small>
         ${warning ? `<small class="practice-duration-warning">${escapeHtml(warning)}</small>` : ""}
+        ${uploadProgressHtml(period)}
       `;
       preview.classList.remove("is-empty");
     } else {
@@ -939,6 +1058,7 @@ function renderCheckins() {
         <span class="video-placeholder-icon">+</span>
         <strong id="${period}-file-label">Record or upload a video</strong>
         <small id="${period}-upload-time">${period === "morning" ? "Due by 9:00 AM" : "Due by 8:00 PM"}</small>
+        ${uploadProgressHtml(period)}
       `;
       preview.classList.add("is-empty");
     }
@@ -1232,11 +1352,16 @@ function closePracticeRecorder() {
 
 async function submitUpload(period) {
   const button = document.querySelector(`[data-submit-upload="${period}"]`);
+  if (uploadProgress[period]) return;
   button.disabled = true;
   let backendWarning = "";
   try {
+    setUploadProgress(period, 2, "Preparing secure upload...");
     if (backendConnected) {
-      const uploadedVideo = await uploadPracticeVideoIfAvailable(period, selectedPracticeFiles[period]);
+      const uploadedVideo = await uploadPracticeVideoIfAvailable(period, selectedPracticeFiles[period], ({ percent, label }) => {
+        setUploadProgress(period, percent, label);
+      });
+      setUploadProgress(period, 99, "Finalising practice check-in...");
       const submission = await apiRequest("/api/student/me/practice-submissions", {
         method: "POST",
         body: JSON.stringify({
@@ -1250,6 +1375,7 @@ async function submitUpload(period) {
       backendWarning = uploadedVideo.warning || submission.warning || "";
     }
 
+    setUploadProgress(period, 100, "Practice submitted.");
     const now = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date());
     state.checkins[period].status = "submitted";
     state.checkins[period].time = now;
@@ -1260,11 +1386,14 @@ async function submitUpload(period) {
     delete temporaryVideoUrls[period];
     delete selectedPracticeFiles[period];
     await syncStudentFromBackend();
+    clearUploadProgress(period);
     showToast(backendWarning || (period === "morning"
       ? "Morning Ninja unlocked. Course energy is building."
       : "Evening Finisher unlocked. Strong close today."));
   } catch (error) {
+    setUploadProgress(period, 0, "Upload failed. Please try again.");
     showToast(error.message);
+    window.setTimeout(() => clearUploadProgress(period), 2400);
   } finally {
     button.disabled = false;
   }
@@ -1283,12 +1412,16 @@ async function removePendingSubmission(submissionId) {
   }
 }
 
+function liveClassroomUrl(roomName) {
+  const safeRoom = `ots-music-school-${roomName || "classroom"}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+  return `https://meet.jit.si/${safeRoom}#config.prejoinPageEnabled=false`;
+}
+
 async function openClassroom(roomName) {
   const modal = document.querySelector("#classroom-modal");
   const frame = document.querySelector("#classroom-frame");
   const liveRoom = document.querySelector("#open-live-room");
-  const safeRoom = `ots-${state.profile.email}-${roomName || "classroom"}`.replace(/[^a-zA-Z0-9_-]/g, "-");
-  const roomUrl = `https://meet.jit.si/${safeRoom}#config.prejoinPageEnabled=false`;
+  const roomUrl = liveClassroomUrl(roomName);
   liveRoom.href = roomUrl;
   frame.hidden = true;
   frame.src = "about:blank";
