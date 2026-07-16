@@ -303,7 +303,7 @@
                     <h3>Chord shapes and timing</h3>
                     <p>6:00 PM - 6:45 PM with <span data-teacher-display-name>Your teacher</span></p>
                   </div>
-                  <button class="button button-secondary join-session" data-room="ots-weekly-session-1">Join classroom</button>
+                  <button class="button button-secondary join-session" data-room="">Join Google Meet</button>
                 </article>
                 <article class="session-card">
                   <div class="session-date">
@@ -315,7 +315,7 @@
                     <h3>Strumming and weekly review</h3>
                     <p>6:00 PM - 6:45 PM with <span data-teacher-display-name>Your teacher</span></p>
                   </div>
-                  <button class="button button-secondary join-session" data-room="ots-weekly-session-2">Join classroom</button>
+                  <button class="button button-secondary join-session" data-room="">Join Google Meet</button>
                 </article>
               </div>
             </section>
@@ -495,7 +495,7 @@
               <p><span data-teacher-first-name>Your teacher</span> will meet you for a focused correction call.</p>
             </div>
             <div class="help-call-actions">
-              <button class="button button-primary" id="join-help-classroom">Join classroom</button>
+              <button class="button button-primary" id="join-help-classroom">Join Google Meet</button>
               <button class="text-button" id="cancel-help-call">Cancel</button>
             </div>
           </div>
@@ -627,9 +627,26 @@
       <p class="eyebrow">FIRST STEP UNLOCKED</p>
       <h2 id="welcome-modal-title">Congrats on choosing to learn a new skill.</h2>
       <p>You can definitely do this. Start with one small practice pod today, and let the streak build from there.</p>
-      <button class="button button-primary button-large" id="welcome-modal-close" type="button">Start my journey</button>
+      <div class="welcome-feature-list">
+        <span>Home: your weekly goal and progress</span>
+        <span>Check-in: record or upload practice</span>
+        <span>Feedback: teacher corrections and notes</span>
+      </div>
+      <button class="button button-primary button-large" id="welcome-modal-close" type="button">Show me the app</button>
     </div>
   </dialog>
+
+  <div class="feature-tour" id="feature-tour" hidden>
+    <div class="feature-tour-card">
+      <p class="eyebrow">APP TOUR</p>
+      <h2 id="feature-tour-title">Here is your Home.</h2>
+      <p id="feature-tour-copy">This is where your weekly goal, practice progress and live classes appear.</p>
+      <div class="feature-tour-actions">
+        <button class="button button-secondary" id="feature-tour-skip" type="button">Skip tour</button>
+        <button class="button button-primary" id="feature-tour-next" type="button">Next feature</button>
+      </div>
+    </div>
+  </div>
 
   <dialog class="modal recorder-modal" id="practice-recorder-modal">
     <div class="modal-card recorder-card">
@@ -657,7 +674,7 @@
     <div class="classroom-shell">
       <header class="classroom-header">
         <div>
-          <p class="eyebrow">OTS CLASSROOM</p>
+          <p class="eyebrow">GOOGLE MEET CLASSROOM</p>
           <h2>Live lesson with <span data-teacher-display-name>Your teacher</span></h2>
         </div>
         <button class="modal-close classroom-close" id="close-classroom" type="button" aria-label="Leave classroom">X</button>
@@ -673,9 +690,9 @@
       <div class="classroom-controls">
         <button class="button button-secondary" id="toggle-classroom-mic" type="button">Mute microphone</button>
         <button class="button button-secondary" id="toggle-classroom-camera" type="button">Turn camera off</button>
-        <a class="button button-primary" id="open-live-room" href="#" target="classroom-room">Enter live room</a>
+        <a class="button button-primary" id="open-live-room" href="#" target="_blank" rel="noopener">Open Google Meet</a>
       </div>
-      <p class="classroom-note">The live room opens inside this app. Camera preview stays local until you enter the room.</p>
+      <p class="classroom-note">Google Meet may open in a browser tab or the Meet app. Use the same Meet link your teacher uses for this session.</p>
       <iframe id="classroom-frame" name="classroom-room" title="OTS live classroom" allow="camera; microphone; fullscreen; display-capture" hidden></iframe>
     </div>
   </dialog>

@@ -2,6 +2,8 @@ const STORAGE_KEY = "musicSchoolOTSStateV1";
 const STUDENT_TOKEN_KEY = "otsStudentToken";
 const WELCOME_SEEN_PREFIX = "otsWelcomeSeen:";
 const WORKER_API_ORIGIN = "https://music-school-ots.sharoncornerstone56.workers.dev";
+const GOOGLE_MEET_CREATE_URL = "https://meet.google.com/new";
+const GOOGLE_MEET_NICKNAME_PREFIX = "ots-music-school-student";
 const API_ORIGIN = (() => {
   const host = window.location.hostname;
   if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".workers.dev")) return "";
@@ -97,6 +99,7 @@ function escapeHtml(value) {
 const defaultState = {
   onboarded: false,
   profile: {
+    id: 0,
     name: "Student",
     email: "",
     instrument: "Guitar",
@@ -182,6 +185,8 @@ let studentToken = localStorage.getItem(STUDENT_TOKEN_KEY) || "";
 let pendingLoginEmail = "";
 let pendingOtpSessionId = "";
 let selectedHelpSlot = null;
+let pendingFeatureTour = false;
+let featureTourIndex = 0;
 let toastTimer;
 const temporaryVideoUrls = {};
 const selectedPracticeFiles = {};
@@ -200,6 +205,39 @@ let recorderTimerId = 0;
 let recordedPracticeBlob = null;
 let recordedPracticeSeconds = 0;
 let recordedPracticeUrl = "";
+
+const featureTourSteps = [
+  {
+    view: "home",
+    selector: '[data-view="home"]',
+    title: "Here is your Home.",
+    copy: "This is your weekly command centre: goal progress, today's quest, live sessions and teacher notes."
+  },
+  {
+    view: "checkin",
+    selector: '[data-view="checkin"]',
+    title: "Here is Check-in.",
+    copy: "Record or upload your morning and evening practice here. Even a short focused video can go to your teacher."
+  },
+  {
+    view: "course",
+    selector: '[data-view="course"]',
+    title: "Here is your Course.",
+    copy: "Your lessons and weekly milestones live here. When practice is due, the course waits until you submit."
+  },
+  {
+    view: "feedback",
+    selector: '[data-view="feedback"]',
+    title: "Here is Feedback.",
+    copy: "Teacher corrections, notes, and help-call updates will collect here after every review."
+  },
+  {
+    view: "profile",
+    selector: '[data-view="profile"]',
+    title: "Here is Profile.",
+    copy: "Manage your learning goal and reminders here so the app stays personal to you."
+  }
+];
 
 async function apiRequest(path, options = {}) {
   const headers = {
@@ -352,6 +390,7 @@ async function syncStudentFromBackend() {
     backendConnected = true;
     state.onboarded = true;
     state.profile.name = data.profile.name;
+    state.profile.id = data.profile.id || state.profile.id || 0;
     state.profile.email = data.profile.email;
     state.profile.instrument = data.profile.instrument;
     state.profile.goal = data.profile.goal;
@@ -517,10 +556,42 @@ function showFirstLoginCelebration(studentName, email) {
   const key = welcomeKey(email);
   if (localStorage.getItem(key)) return;
   localStorage.setItem(key, "1");
+  pendingFeatureTour = true;
   const firstName = (studentName || "Student").trim().split(/\s+/)[0] || "Student";
   document.querySelector("#welcome-modal-title").textContent =
     `${firstName}, congrats on choosing to learn a new skill.`;
   document.querySelector("#welcome-modal").showModal();
+}
+
+function clearFeatureTourHighlight() {
+  document.querySelectorAll(".tour-highlight").forEach((element) => {
+    element.classList.remove("tour-highlight");
+  });
+}
+
+function showFeatureTourStep() {
+  const step = featureTourSteps[featureTourIndex];
+  if (!step) return;
+  navigate(step.view, true);
+  clearFeatureTourHighlight();
+  const target = document.querySelector(step.selector);
+  if (target) target.classList.add("tour-highlight");
+  document.querySelector("#feature-tour-title").textContent = step.title;
+  document.querySelector("#feature-tour-copy").textContent = step.copy;
+  document.querySelector("#feature-tour-next").textContent =
+    featureTourIndex === featureTourSteps.length - 1 ? "Finish tour" : "Next feature";
+}
+
+function startFeatureTour() {
+  featureTourIndex = 0;
+  document.querySelector("#feature-tour").hidden = false;
+  showFeatureTourStep();
+}
+
+function endFeatureTour() {
+  document.querySelector("#feature-tour").hidden = true;
+  clearFeatureTourHighlight();
+  navigate("home", true);
 }
 
 function navigate(viewName, bypassGate = false) {
@@ -714,7 +785,7 @@ function renderHome() {
             <h3>${session.topic}</h3>
             <p>${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(date)} with ${teacher.displayName}</p>
           </div>
-          <button class="button button-secondary join-session" data-room="${escapeHtml(session.meeting_room || `session-${session.id}`)}">Join classroom</button>
+          <button class="button button-secondary join-session" data-room="${escapeHtml(session.meeting_room || "")}" data-student-id="${escapeHtml(session.student_id || state.profile.id || "")}">Join Google Meet</button>
         </article>
       `;
     }).join("")
@@ -1412,20 +1483,41 @@ async function removePendingSubmission(submissionId) {
   }
 }
 
-function liveClassroomUrl(roomName) {
-  const safeRoom = `ots-music-school-${roomName || "classroom"}`.replace(/[^a-zA-Z0-9_-]/g, "-");
-  return `https://meet.jit.si/${safeRoom}#config.prejoinPageEnabled=false`;
+function standardGoogleMeetLink(studentId) {
+  const id = Number(studentId || 0);
+  if (!id) return "";
+  return `https://meet.google.com/lookup/${GOOGLE_MEET_NICKNAME_PREFIX}-${id}`;
 }
 
-async function openClassroom(roomName) {
+function liveClassroomUrl(meetingValue, studentId = 0) {
+  const value = String(meetingValue || "").trim();
+  if (!value) return standardGoogleMeetLink(studentId) || GOOGLE_MEET_CREATE_URL;
+  if (/^https?:\/\//i.test(value)) return value;
+  const code = value
+    .replace(/^meet\.google\.com\//i, "")
+    .split(/[?#]/)[0]
+    .trim()
+    .toLowerCase();
+  if (/^[a-z]{3}-?[a-z]{4}-?[a-z]{3}$/.test(code)) {
+    return `https://meet.google.com/${code}`;
+  }
+  return standardGoogleMeetLink(studentId) || GOOGLE_MEET_CREATE_URL;
+}
+
+async function openClassroom(roomName, studentId = 0) {
   const modal = document.querySelector("#classroom-modal");
   const frame = document.querySelector("#classroom-frame");
   const liveRoom = document.querySelector("#open-live-room");
-  const roomUrl = liveClassroomUrl(roomName);
+  const roomUrl = liveClassroomUrl(roomName, studentId);
   liveRoom.href = roomUrl;
   frame.hidden = true;
   frame.src = "about:blank";
   modal.showModal();
+  if (roomUrl.includes("/lookup/")) {
+    showToast("Opening the standard Meet room for this student. Teacher and student use the same link.");
+  } else if (roomUrl === GOOGLE_MEET_CREATE_URL) {
+    showToast("No Google Meet link is saved yet. Add the Meet link in the session from admin.");
+  }
 
   try {
     classroomStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -1616,7 +1708,10 @@ function bindEvents() {
     }
 
     const classroomButton = event.target.closest(".join-session");
-    if (classroomButton) openClassroom(classroomButton.dataset.room);
+    if (classroomButton) {
+      openClassroom(classroomButton.dataset.room, classroomButton.dataset.studentId || state.profile.id);
+      return;
+    }
 
     const weekToggle = event.target.closest("[data-week-toggle]");
     if (weekToggle) {
@@ -1654,7 +1749,20 @@ function bindEvents() {
   document.querySelector("#close-practice-recorder").addEventListener("click", closePracticeRecorder);
   document.querySelector("#welcome-modal-close").addEventListener("click", () => {
     document.querySelector("#welcome-modal").close();
+    if (pendingFeatureTour) {
+      pendingFeatureTour = false;
+      startFeatureTour();
+    }
   });
+  document.querySelector("#feature-tour-next").addEventListener("click", () => {
+    if (featureTourIndex >= featureTourSteps.length - 1) {
+      endFeatureTour();
+      return;
+    }
+    featureTourIndex += 1;
+    showFeatureTourStep();
+  });
+  document.querySelector("#feature-tour-skip").addEventListener("click", endFeatureTour);
 
   document.querySelector("#close-classroom").addEventListener("click", closeClassroom);
   document.querySelector("#toggle-classroom-mic").addEventListener("click", (event) => {
@@ -1671,11 +1779,8 @@ function bindEvents() {
     });
     event.currentTarget.textContent = classroomCameraEnabled ? "Turn camera off" : "Turn camera on";
   });
-  document.querySelector("#open-live-room").addEventListener("click", (event) => {
-    event.preventDefault();
-    const frame = document.querySelector("#classroom-frame");
-    frame.src = event.currentTarget.href;
-    frame.hidden = false;
+  document.querySelector("#open-live-room").addEventListener("click", () => {
+    showToast("Opening Google Meet. Use the same link as your teacher.");
   });
 
   document.querySelector("#help-call-form").addEventListener("submit", async (event) => {
@@ -1719,7 +1824,7 @@ function bindEvents() {
   });
 
   document.querySelector("#join-help-classroom").addEventListener("click", () => {
-    openClassroom(`ots-help-call-${state.helpCall?.id || "room"}`);
+    openClassroom(standardGoogleMeetLink(state.profile.id), state.profile.id);
   });
 
   document.querySelector("#profile-form").addEventListener("submit", async (event) => {

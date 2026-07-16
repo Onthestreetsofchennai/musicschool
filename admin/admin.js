@@ -5,6 +5,8 @@ const API_ORIGIN = (() => {
   if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".workers.dev")) return "";
   return WORKER_API_ORIGIN;
 })();
+const GOOGLE_MEET_CREATE_URL = "https://meet.google.com/new";
+const GOOGLE_MEET_NICKNAME_PREFIX = "ots-music-school-student";
 
 let adminToken = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
 let adminUser = null;
@@ -36,13 +38,33 @@ function formatDateTime(value) {
   }).format(new Date(value));
 }
 
-function liveClassroomUrl(roomName) {
-  const safeRoom = `ots-music-school-${roomName || "classroom"}`.replace(/[^a-zA-Z0-9_-]/g, "-");
-  return `https://meet.jit.si/${safeRoom}#config.prejoinPageEnabled=false`;
+function standardGoogleMeetLink(studentId) {
+  const id = Number(studentId || 0);
+  if (!id) return "";
+  return `https://meet.google.com/lookup/${GOOGLE_MEET_NICKNAME_PREFIX}-${id}`;
+}
+
+function liveClassroomUrl(meetingValue, studentId = 0) {
+  const value = String(meetingValue || "").trim();
+  if (!value) return standardGoogleMeetLink(studentId) || GOOGLE_MEET_CREATE_URL;
+  if (/^https?:\/\//i.test(value)) return value;
+  const code = value
+    .replace(/^meet\.google\.com\//i, "")
+    .split(/[?#]/)[0]
+    .trim()
+    .toLowerCase();
+  if (/^[a-z]{3}-?[a-z]{4}-?[a-z]{3}$/.test(code)) {
+    return `https://meet.google.com/${code}`;
+  }
+  return standardGoogleMeetLink(studentId) || GOOGLE_MEET_CREATE_URL;
 }
 
 function sessionRoomName(session) {
-  return session.meeting_room || `session-${session.id}`;
+  return session.meeting_room || "";
+}
+
+function defaultSessionMeetLink() {
+  return standardGoogleMeetLink(document.querySelector("#session-student")?.value);
 }
 
 function assetUrl(path) {
@@ -239,7 +261,7 @@ async function loadDashboard() {
         <span>${formatDateTime(session.scheduled_at)}</span>
         <strong>${escapeHtml(session.student_name)}</strong>
         <small>${escapeHtml(session.topic)} · ${escapeHtml(session.teacher_name)}</small>
-        <a class="row-action" href="${liveClassroomUrl(sessionRoomName(session))}" target="_blank" rel="noopener">Join classroom</a>
+        <a class="row-action" href="${liveClassroomUrl(sessionRoomName(session), session.student_id)}" target="_blank" rel="noopener">Join Google Meet</a>
       </article>
     `).join("")
     : '<div class="empty-state">No upcoming sessions.</div>';
@@ -541,7 +563,7 @@ async function loadSessions() {
         <td><span class="status-pill ${session.status === "scheduled" || session.status === "attended" ? "green" : "amber"}">${escapeHtml(session.status)}</span></td>
         <td>
           <div class="session-actions">
-            <a class="row-action" href="${liveClassroomUrl(sessionRoomName(session))}" target="_blank" rel="noopener">Join</a>
+            <a class="row-action" href="${liveClassroomUrl(sessionRoomName(session), session.student_id)}" target="_blank" rel="noopener">Join Google Meet</a>
             <button class="row-action edit-session" data-session-id="${session.id}">Edit</button>
           </div>
         </td>
@@ -572,7 +594,7 @@ async function openSessionEditor(session = null) {
   document.querySelector("#session-topic").value = session?.topic || "";
   document.querySelector("#session-duration").value = session?.duration_minutes || 45;
   document.querySelector("#session-status").value = session?.status || "scheduled";
-  document.querySelector("#session-room").value = session?.meeting_room || "";
+  document.querySelector("#session-room").value = session?.meeting_room || defaultSessionMeetLink();
   document.querySelector("#session-notes").value = session?.notes || "";
   openAdminModal("#session-modal");
 }
@@ -1173,6 +1195,13 @@ function bindEvents() {
   document.querySelector("#create-staff-form").addEventListener("submit", createStaff);
   document.querySelector("#create-staff-role").addEventListener("change", updateStaffInstrumentField);
   document.querySelector("#open-create-session").addEventListener("click", () => openSessionEditor());
+  document.querySelector("#session-student").addEventListener("change", () => {
+    const roomInput = document.querySelector("#session-room");
+    const current = roomInput.value.trim();
+    if (!current || current.includes("/lookup/ots-music-school-student-")) {
+      roomInput.value = defaultSessionMeetLink();
+    }
+  });
   document.querySelector("#session-form").addEventListener("submit", saveSession);
   document.querySelector("#course-student-select").addEventListener("change", (event) => loadCoursePlan(Number(event.target.value)));
   document.querySelector("#course-total-weeks").addEventListener("change", renderCourseWeekEditor);
