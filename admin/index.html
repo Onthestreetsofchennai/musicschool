@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111426">
   <title>OTS Admin | Student Analysis</title>
-  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="../favicon-48x48.png?v=37">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32x32.png?v=37">
+  <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16x16.png?v=37">
+  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=37">
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="stylesheet" href="admin.css">
 </head>
@@ -15,7 +16,9 @@
   <div class="admin-login" id="admin-login">
     <section class="login-card">
       <div class="admin-brand">
-        <span class="brand-mark"><img src="../brand-logo-transparent.png" alt="On The Streets"></span>
+        <button class="brand-home-button" id="admin-brand-home" type="button" aria-label="Go to Dashboard">
+          <span class="brand-mark"><img src="../brand-logo-transparent.png" alt="On The Streets"></span>
+        </button>
         <span>
           <strong>MUSIC SCHOOL</strong>
           <small>Academic operations</small>
@@ -112,7 +115,7 @@
             <strong id="admin-user-name">OTS Admin</strong>
             <small id="admin-user-role">Super admin</small>
           </div>
-          <span class="admin-avatar" id="admin-avatar">OA</span>
+          <button class="admin-avatar" id="admin-avatar" type="button" aria-label="Go to Dashboard">OA</button>
           <button class="logout-button" id="logout-button">Sign out</button>
         </div>
       </header>
@@ -358,7 +361,7 @@
             <div>
               <p class="eyebrow">PERSONALISED LEARNING</p>
               <h1>Course and practice plan</h1>
-              <p>Choose a student, then set their course length, weekly goal, target practice pods and student notes.</p>
+              <p>Choose a student, then set their weekly mission, target check-ins, teacher instruction and notes box.</p>
             </div>
           </div>
 
@@ -378,17 +381,17 @@
                   <input id="course-total-weeks" type="number" min="1" max="24" required>
                 </label>
                 <label>
-                  Minimum practice minutes
+                  Guided mission minutes
                   <input id="course-practice-minutes" type="number" min="1" max="60" required>
                 </label>
                 <div class="course-requirements">
                   <label class="checkbox-row">
                     <input id="course-morning-required" type="checkbox">
-                    <span>Morning practice required</span>
+                    <span>Daily check-in required</span>
                   </label>
                   <label class="checkbox-row">
                     <input id="course-evening-required" type="checkbox">
-                    <span>Evening practice required</span>
+                    <span>Optional second upload</span>
                   </label>
                 </div>
               </div>

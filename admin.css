@@ -109,6 +109,22 @@ button {
   object-fit: contain;
 }
 
+.brand-home-button {
+  display: grid;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.brand-home-button:focus-visible,
+.admin-avatar:focus-visible {
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgba(245, 119, 161, 0.45);
+}
+
 .login-copy {
   margin: 36px 0 26px;
 }
@@ -2060,4 +2076,42 @@ textarea:focus {
   .review-page-form {
     padding: 18px 14px 30px;
   }
+}
+
+/* Final logo treatment: show only the transparent artwork. */
+.brand-mark {
+  width: 52px;
+  height: 52px;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.admin-avatar {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+.admin-avatar.has-logo {
+  width: 50px;
+  height: 50px;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-avatar.has-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }

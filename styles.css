@@ -249,6 +249,40 @@ button {
   object-fit: contain;
 }
 
+.brand-home-button,
+.brand-home-link {
+  display: grid;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.brand-home-button:focus-visible,
+.brand-home-link:focus-visible {
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgba(245, 119, 161, 0.45);
+}
+
+.brand-home-link {
+  text-decoration: none;
+}
+
+.brand-logo {
+  display: block;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  background: transparent;
+}
+
+.mobile-brand .brand-logo {
+  width: 44px;
+  height: 44px;
+}
+
 .sidebar-brand {
   margin-bottom: 42px;
 }
@@ -4387,4 +4421,28 @@ textarea:focus,
   #view-home .hero-orbit {
     min-height: 190px;
   }
+}
+
+/* Final logo treatment: show only the transparent artwork. */
+.brand-mark,
+.button-primary.brand-mark {
+  width: 52px;
+  height: 52px;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mobile-brand .brand-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 0;
 }

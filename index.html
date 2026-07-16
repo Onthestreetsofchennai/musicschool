@@ -6,9 +6,10 @@
   <meta name="theme-color" content="#111426">
   <meta name="description" content="MUSIC SCHOOL OTS guided 12-week music learning app">
   <title>MUSIC SCHOOL OTS</title>
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="favicon-48x48.png?v=37">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=37">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=37">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=37">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -19,7 +20,9 @@
   <div class="onboarding" id="student-auth">
     <div class="onboarding-panel auth-panel">
       <div class="brand-lockup">
-        <span class="brand-mark"><img src="brand-logo-transparent.png" alt="On The Streets"></span>
+        <a class="brand-home-link" href="./" aria-label="Go to Home">
+          <img class="brand-logo" src="brand-logo-cropped.png" alt="On The Streets" width="52" height="52">
+        </a>
         <span>
           <strong>MUSIC SCHOOL</strong>
           <small>Student login</small>
@@ -65,22 +68,24 @@
 
   <div class="practice-gate" id="practice-gate" hidden>
     <section class="practice-gate-card">
-      <span class="practice-gate-icon">7</span>
+      <span class="practice-gate-icon">10</span>
       <p class="eyebrow">DAILY PRACTICE REQUIRED</p>
-      <h1 id="practice-gate-title">Upload your morning practice</h1>
-      <p id="practice-gate-message">Your course path opens after today's required practice is submitted. Home, Check-in, Feedback and Profile stay open.</p>
+      <h1 id="practice-gate-title">Complete today's mission</h1>
+      <p id="practice-gate-message">Your course path opens after one guided mission and one short daily check-in. Home, Check-in, Feedback and Profile stay open.</p>
       <div class="practice-gate-actions">
         <button class="button button-primary button-large" id="practice-gate-upload">Upload practice now</button>
         <button class="button button-secondary" id="practice-gate-snooze">Snooze reminder for 10 minutes</button>
       </div>
-      <small>Snoozing hides this reminder. The Course tab stays paused until practice is submitted.</small>
+      <small>Snoozing hides this reminder. The Course tab stays paused until today's check-in is submitted.</small>
     </section>
   </div>
 
   <div class="app-shell" id="app-shell" inert aria-hidden="true">
     <aside class="sidebar">
       <div class="brand-lockup sidebar-brand">
-        <span class="brand-mark"><img src="brand-logo-transparent.png" alt="On The Streets"></span>
+        <a class="brand-home-link" href="./" aria-label="Go to Home">
+          <img class="brand-logo" src="brand-logo-cropped.png" alt="On The Streets" width="52" height="52">
+        </a>
         <span>
           <strong>MUSIC SCHOOL</strong>
           <small>12-week guided course</small>
@@ -122,7 +127,9 @@
     <div class="main-column">
       <header class="topbar">
         <div class="mobile-brand">
-          <span class="brand-mark"><img src="brand-logo-transparent.png" alt="On The Streets"></span>
+          <a class="brand-home-link" href="./" aria-label="Go to Home">
+            <img class="brand-logo" src="brand-logo-cropped.png" alt="On The Streets" width="44" height="44">
+          </a>
           <strong>MUSIC SCHOOL</strong>
         </div>
         <div class="topbar-copy">
@@ -170,7 +177,7 @@
                 </div>
                 <strong id="dashboard-week-progress-text">0%</strong>
               </div>
-              <small id="dashboard-week-pods">0 of 4 practice pods completed</small>
+              <small id="dashboard-week-pods">0 of 4 daily check-ins completed</small>
             </article>
 
             <article class="teacher-notes-card clay-card">
@@ -202,7 +209,7 @@
             <article class="quest-card clay-card" id="first-login-quest">
               <span class="quest-kicker">PERFORMER JOURNEY</span>
               <h2 id="welcome-quest-title">You chose guitar. That is the first stage win.</h2>
-              <p id="welcome-quest-copy">Stay tiny and consistent. Every practice video is proof that you are moving closer to stage confidence.</p>
+              <p id="welcome-quest-copy">Stay tiny and consistent. One focused mission every day is proof that you are moving closer to stage confidence.</p>
             </article>
 
             <article class="quest-card clay-card">
@@ -210,11 +217,11 @@
               <h2>Unlock today's riff gate</h2>
               <div class="quest-pods" id="daily-quest-pods">
                 <button class="quest-pod" type="button" data-quest-pod="morning" data-checkin-period="morning">
-                  <strong>Morning riff pod</strong>
+                  <strong>Today's guided mission</strong>
                   <span id="morning-quest-status">Waiting for practice</span>
                 </button>
-                <button class="quest-pod" type="button" data-quest-pod="evening" data-checkin-period="evening">
-                  <strong>Evening rhythm pod</strong>
+                <button class="quest-pod" type="button" data-quest-pod="evening" data-checkin-period="evening" hidden>
+                  <strong>Second check-in disabled</strong>
                   <span id="evening-quest-status">Waiting for practice</span>
                 </button>
               </div>
@@ -240,7 +247,7 @@
                   </article>
                   <article>
                     <strong id="group-pods-count">0</strong>
-                    <span>pods this week</span>
+                  <span>check-ins this week</span>
                   </article>
                 </div>
                 <div class="speedometer-gauge">
@@ -253,7 +260,7 @@
                     <span>This week activity</span>
                   </div>
                 </div>
-                <h3 id="weekly-activity-message">Start with one practice pod today.</h3>
+                <h3 id="weekly-activity-message">Start with one daily check-in today.</h3>
                 <div class="activity-mini-track" id="activity-mini-track" aria-label="Weekly milestone steps"></div>
               </section>
 
@@ -324,23 +331,23 @@
               <div class="section-heading">
                 <div>
                   <p class="eyebrow">TODAY</p>
-                  <h2>Daily check-ins</h2>
+                  <h2>Daily mission</h2>
                 </div>
-                <span class="completion-ring" id="daily-ring">1/2</span>
+                <span class="completion-ring" id="daily-ring">0/1</span>
               </div>
               <div class="daily-list">
                 <button class="daily-item is-complete" data-view="checkin" id="home-morning-item">
                   <span class="check-icon">✓</span>
                   <span>
-                    <strong>Morning practice</strong>
-                    <small id="home-morning-status">Reviewed by your teacher</small>
+                    <strong>Today's mission check-in</strong>
+                    <small id="home-morning-status">Do 10 minutes, then upload your best 30-60 seconds</small>
                   </span>
-                  <span class="daily-time">7 min</span>
+                  <span class="daily-time">30-60 sec</span>
                 </button>
-                <button class="daily-item" data-view="checkin" id="home-evening-item">
+                <button class="daily-item" data-view="checkin" id="home-evening-item" hidden>
                   <span class="check-icon">2</span>
                   <span>
-                    <strong>Evening practice</strong>
+                    <strong>Extra practice optional</strong>
                     <small id="home-evening-status">Due by 8:00 PM</small>
                   </span>
                   <span class="daily-time">7 min</span>
@@ -354,7 +361,7 @@
             <div>
               <p class="eyebrow">YOUR ASSIGNED TEACHER</p>
               <h2 data-teacher-display-name>Your teacher</h2>
-              <p>“Keep your wrist relaxed during chord changes. I’ll check the same point in your evening upload.”</p>
+              <p>“Keep your wrist relaxed during chord changes. I’ll check the same point in today’s check-in.”</p>
             </div>
             <button class="button button-primary open-help-call">Need help?</button>
           </section>
@@ -383,8 +390,8 @@
               <span>Live sessions</span>
             </div>
             <div>
-              <span class="summary-number" id="course-summary-practice">168</span>
-              <span>Practice check-ins</span>
+              <span class="summary-number" id="course-summary-practice">84</span>
+              <span>Daily check-ins</span>
             </div>
             <div>
               <span class="summary-number">1</span>
@@ -399,8 +406,8 @@
           <div class="page-intro">
             <div>
               <p class="eyebrow">DAILY ACCOUNTABILITY</p>
-              <h1 id="practice-plan-title">Two videos. 7 mins of focus.</h1>
-              <p id="practice-plan-description">Aim for 7 mins. Even a 1-minute practice can be submitted for review and earns partial progress points.</p>
+              <h1 id="practice-plan-title">One guided mission. One short check-in.</h1>
+              <p id="practice-plan-description">Practise for 10 minutes, then upload your best 30-60 seconds. Longer videos are okay, but only one daily check-in is required.</p>
             </div>
             <div class="streak-pill">
               <span class="status-dot"></span>
@@ -420,15 +427,15 @@
             <article class="upload-card" data-period="morning">
               <div class="upload-heading">
                 <div>
-                  <p class="eyebrow">MORNING</p>
-                  <h2 id="morning-practice-requirement">7-minute focus goal</h2>
+                  <p class="eyebrow">DAILY CHECK-IN</p>
+                  <h2 id="morning-practice-requirement">30-60 second practice check-in</h2>
                 </div>
                 <span class="upload-status is-reviewed" id="morning-status-badge">Reviewed</span>
               </div>
               <div class="video-preview" id="morning-preview">
                 <span class="video-placeholder-icon">▶</span>
-                <strong id="morning-file-label">morning-practice.mp4</strong>
-                <small id="morning-upload-time">Uploaded at 7:18 AM</small>
+                <strong id="morning-file-label">Record or upload your check-in</strong>
+                <small id="morning-upload-time">Due by 8:00 PM</small>
               </div>
               <div class="practice-action-row">
                 <button class="button button-primary" type="button" data-record-practice="morning">Record video</button>
@@ -437,15 +444,15 @@
                   <input type="file" accept="video/*" data-upload-input="morning" hidden>
                 </label>
               </div>
-              <button class="button button-primary submit-upload" data-submit-upload="morning" hidden>Submit morning video</button>
+              <button class="button button-primary submit-upload" data-submit-upload="morning" hidden>Submit daily check-in</button>
               <button class="text-button remove-pending-upload" data-remove-upload="morning" hidden>Remove pending upload</button>
             </article>
 
-            <article class="upload-card" data-period="evening">
+            <article class="upload-card" data-period="evening" hidden>
               <div class="upload-heading">
                 <div>
                   <p class="eyebrow">EVENING</p>
-                  <h2 id="evening-practice-requirement">7-minute focus goal</h2>
+                  <h2 id="evening-practice-requirement">Optional extra practice</h2>
                 </div>
                 <span class="upload-status" id="evening-status-badge">Due today</span>
               </div>
@@ -461,7 +468,7 @@
                   <input type="file" accept="video/*" data-upload-input="evening" hidden>
                 </label>
               </div>
-              <button class="button button-primary submit-upload" data-submit-upload="evening" hidden>Submit evening video</button>
+              <button class="button button-primary submit-upload" data-submit-upload="evening" hidden>Submit optional video</button>
               <button class="text-button remove-pending-upload" data-remove-upload="evening" hidden>Remove pending upload</button>
             </article>
           </div>

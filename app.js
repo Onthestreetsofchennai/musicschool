@@ -11,6 +11,10 @@ const API_ORIGIN = (() => {
 })();
 const MIN_SUBMIT_PRACTICE_SECONDS = 60;
 const LEADERBOARD_MIN_STUDENTS = 30;
+const DAILY_CHECKIN_PERIOD = "morning";
+const DAILY_MISSION_MINUTES = 10;
+const DAILY_CHECKIN_TARGET_SECONDS = 60;
+const TEACHER_REVIEW_HOURS = 12;
 
 const courseWeeks = [
   {
@@ -112,9 +116,9 @@ const defaultState = {
   reviews: 9,
   checkins: {
     morning: {
-      status: "reviewed",
-      fileName: "morning-practice.mp4",
-      time: "7:18 AM"
+      status: "pending",
+      fileName: "",
+      time: ""
     },
     evening: {
       status: "pending",
@@ -129,18 +133,18 @@ const defaultState = {
   },
   practiceGate: {
     locked: false,
-    activePeriod: null,
+    activePeriod: DAILY_CHECKIN_PERIOD,
     missingPeriods: [],
-    minDurationSeconds: 420,
+    minDurationSeconds: DAILY_MISSION_MINUTES * 60,
     minSubmitSeconds: MIN_SUBMIT_PRACTICE_SECONDS,
     message: ""
   },
   coursePlan: {
     courseTitle: "12-week Guitar course",
     totalWeeks: 12,
-    practiceMinutes: 7,
+    practiceMinutes: DAILY_MISSION_MINUTES,
     morningRequired: true,
-    eveningRequired: true,
+    eveningRequired: false,
     weeks: courseWeeks
   },
   upcomingSessions: [],
@@ -151,10 +155,10 @@ const defaultState = {
 
 const feedbackItems = [
   {
-    period: "Morning practice",
+    period: "Daily check-in",
     time: "Today, 9:24 AM",
     title: "Cleaner chord shapes today",
-    message: "Good timing. Your G and D shapes are much cleaner. Keep the same relaxed wrist position in the evening video.",
+    message: "Good timing. Your G and D shapes are much cleaner. Keep the same relaxed wrist position in tomorrow's check-in.",
     inputs: [
       "Slow the G-to-C transition down.",
       "Keep your thumb behind the neck.",
@@ -162,7 +166,7 @@ const feedbackItems = [
     ]
   },
   {
-    period: "Evening practice",
+    period: "Daily check-in",
     time: "Yesterday, 8:46 PM",
     title: "Rhythm is becoming steady",
     message: "You stayed with the beat even after a small mistake. That recovery is important. Tomorrow, use the metronome at 60 BPM.",
@@ -217,7 +221,7 @@ const featureTourSteps = [
     view: "checkin",
     selector: '[data-view="checkin"]',
     title: "Here is Check-in.",
-    copy: "Record or upload your morning and evening practice here. Even a short focused video can go to your teacher."
+    copy: "Do the guided 10-minute mission, then record or upload one short daily check-in for your teacher."
   },
   {
     view: "course",
@@ -407,9 +411,9 @@ async function syncStudentFromBackend() {
     state.coursePlan = data.coursePlan ? {
       courseTitle: data.coursePlan.course_title,
       totalWeeks: data.coursePlan.total_weeks,
-      practiceMinutes: data.coursePlan.practice_minutes,
-      morningRequired: data.coursePlan.morning_required,
-      eveningRequired: data.coursePlan.evening_required,
+      practiceMinutes: DAILY_MISSION_MINUTES,
+      morningRequired: true,
+      eveningRequired: false,
       weeks: data.coursePlan.weeks || courseWeeks
     } : structuredClone(defaultState.coursePlan);
     state.upcomingSessions = data.upcomingSessions || [];
@@ -420,21 +424,34 @@ async function syncStudentFromBackend() {
       evening: { status: "pending", fileName: "", time: "" }
     };
 
-    for (const period of ["morning", "evening"]) {
-      const submission = data.todaySubmissions.find((item) => item.period === period);
-      if (submission) {
-        state.checkins[period] = {
-          id: submission.id,
-          status: submission.review_status === "reviewed" ? "reviewed" : "submitted",
-          fileName: submission.file_name,
-          time: new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date(submission.uploaded_at)),
-          durationSeconds: Number(submission.duration_seconds || 0)
-        };
-      }
+    const todaySubmission = (data.todaySubmissions || []).find((item) => item.period === DAILY_CHECKIN_PERIOD) ||
+      (data.todaySubmissions || [])[0];
+    if (todaySubmission) {
+      state.checkins[DAILY_CHECKIN_PERIOD] = {
+        id: todaySubmission.id,
+        status: todaySubmission.review_status === "reviewed" ? "reviewed" : "submitted",
+        fileName: todaySubmission.file_name,
+        time: new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date(todaySubmission.uploaded_at)),
+        durationSeconds: Number(todaySubmission.duration_seconds || 0),
+        uploadedAt: todaySubmission.uploaded_at
+      };
     }
 
+    const hasDailySubmission = Boolean(todaySubmission);
+    state.practiceGate = {
+      ...(data.practiceGate || {}),
+      locked: !hasDailySubmission,
+      activePeriod: DAILY_CHECKIN_PERIOD,
+      missingPeriods: hasDailySubmission ? [] : [DAILY_CHECKIN_PERIOD],
+      minDurationSeconds: DAILY_MISSION_MINUTES * 60,
+      minSubmitSeconds: MIN_SUBMIT_PRACTICE_SECONDS,
+      message: hasDailySubmission
+        ? "Today's guided mission is complete."
+        : "Complete one guided 10-minute mission, then upload one short 30-60 second check-in."
+    };
+
     backendFeedback = data.feedback.map((item) => ({
-      period: `${item.period === "morning" ? "Morning" : "Evening"} practice`,
+      period: "Daily check-in",
       time: formatBackendDate(item.reviewed_at),
       title: item.positive_observation || "Practice reviewed",
       message: item.main_correction || "Your teacher has reviewed this practice check-in.",
@@ -504,10 +521,50 @@ function formatPracticeDuration(seconds) {
 
 function practiceDurationNote(durationSeconds, targetSeconds) {
   const duration = Math.round(Number(durationSeconds) || 0);
-  const target = Math.round(Number(targetSeconds) || 420);
+  const target = Math.round(Number(targetSeconds) || DAILY_CHECKIN_TARGET_SECONDS);
   if (!duration || duration >= target) return "";
-  const targetMinutes = Math.max(1, Math.round(target / 60));
-  return `Short practice accepted: ${formatPracticeDuration(duration)} uploaded. Aim for ${targetMinutes} mins for full progress points.`;
+  return `Short check-in accepted: ${formatPracticeDuration(duration)} uploaded. Aim for 30-60 seconds so your teacher can review one focused point.`;
+}
+
+function dailyStatus() {
+  const primary = state.checkins?.[DAILY_CHECKIN_PERIOD] || {};
+  const fallback = state.checkins?.evening || {};
+  return ["submitted", "reviewed", "selected"].includes(primary.status)
+    ? primary
+    : ["submitted", "reviewed", "selected"].includes(fallback.status)
+      ? fallback
+      : primary;
+}
+
+function dailySubmitted() {
+  return ["submitted", "reviewed"].includes(dailyStatus().status);
+}
+
+function expectedReviewCopy(uploadedAt = null) {
+  const base = uploadedAt ? new Date(uploadedAt) : new Date();
+  const expected = new Date(base.getTime() + TEACHER_REVIEW_HOURS * 60 * 60 * 1000);
+  const hour = Number(new Intl.DateTimeFormat("en-IN", { hour: "2-digit", hour12: false }).format(expected));
+  if (hour >= 22) expected.setHours(11, 0, 0, 0);
+  if (hour < 9) expected.setHours(11, 0, 0, 0);
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(expected);
+}
+
+function dailyMissionFromWeek() {
+  const week = currentWeekPlan();
+  return {
+    title: week.weeklyGoal || "Complete today's guided mission.",
+    instruction: week.teacherNotes || week.practice_instructions || week.practiceInstructions || week.focus ||
+      "Practise slowly, record your cleanest 30-60 seconds, and send it to your teacher.",
+    focus: week.focus || `Week ${state.currentWeek} ${state.profile.instrument} focus`,
+    targetSkill: week.milestone || week.title || "Clean rhythm and chord control",
+    reference: (week.lessons || [])[0] || "Use your teacher's last correction as reference.",
+    due: "Before 8:00 PM",
+    minutes: Number(state.coursePlan?.practiceMinutes || DAILY_MISSION_MINUTES) || DAILY_MISSION_MINUTES
+  };
 }
 
 function setUploadProgress(period, percent, label) {
@@ -634,11 +691,10 @@ function renderPracticeGate(forceVisible = false) {
   appShell.classList.toggle("is-practice-locked", state.practiceGate.locked);
   if (!state.practiceGate.locked) sessionStorage.removeItem("otsPracticeGateSnoozedUntil");
 
-  const periodLabel = state.practiceGate.activePeriod === "evening" ? "evening" : "morning";
-  document.querySelector(".practice-gate-icon").textContent = Math.round(state.practiceGate.minDurationSeconds / 60);
-  document.querySelector("#practice-gate-title").textContent = `Upload your ${periodLabel} practice`;
+  document.querySelector(".practice-gate-icon").textContent = DAILY_MISSION_MINUTES;
+  document.querySelector("#practice-gate-title").textContent = "Complete today's mission";
   document.querySelector("#practice-gate-message").textContent = state.practiceGate.message ||
-    `Upload at least ${Math.round(state.practiceGate.minDurationSeconds / 60)} minutes to unlock the Course tab.`;
+    "Finish the guided 10-minute practice, then upload one short 30-60 second check-in.";
 }
 
 function calculateProgress() {
@@ -682,7 +738,7 @@ function weeklyGoalSummary() {
     if (!["pending", "reviewed"].includes(String(submission.review_status || "pending"))) return;
     submissionKeys.add(submission.id || `${submission.period}-${submission.uploaded_at}`);
   });
-  const todayCount = ["morning", "evening"].filter(periodSubmitted).length;
+  const todayCount = dailySubmitted() ? 1 : 0;
   const completedPods = Math.min(targetPods, Math.max(submissionKeys.size, todayCount));
   const percent = Math.min(100, Math.round((completedPods / targetPods) * 100));
   return {
@@ -727,15 +783,11 @@ function renderTeacherIdentity() {
 
 function renderHome() {
   const goalSummary = weeklyGoalSummary();
+  const mission = dailyMissionFromWeek();
   const name = state.profile.name || "Student";
   const initial = name.trim().charAt(0).toUpperCase() || "S";
-  const morningSubmitted = ["submitted", "reviewed"].includes(state.checkins.morning.status);
-  const eveningSubmitted = ["submitted", "reviewed"].includes(state.checkins.evening.status);
-  const requiredPeriods = [
-    state.coursePlan?.morningRequired ? "morning" : null,
-    state.coursePlan?.eveningRequired ? "evening" : null
-  ].filter(Boolean);
-  const submittedCount = requiredPeriods.filter((period) => ["submitted", "reviewed"].includes(state.checkins[period].status)).length;
+  const submitted = dailySubmitted();
+  const daily = dailyStatus();
 
   const heroInstrument = document.querySelector("#hero-instrument");
   if (heroInstrument) heroInstrument.textContent = state.profile.instrument.toUpperCase();
@@ -750,25 +802,24 @@ function renderHome() {
   document.querySelector("#dashboard-week-progress-text").textContent = `${goalSummary.percent}%`;
   document.querySelector("#dashboard-week-progress-bar").style.width = `${goalSummary.percent}%`;
   document.querySelector("#dashboard-week-pods").textContent =
-    `${goalSummary.completedPods} of ${goalSummary.targetPods} practice pods completed`;
+    `${goalSummary.completedPods} of ${goalSummary.targetPods} daily check-ins completed`;
   document.querySelector("#dashboard-teacher-notes").textContent = goalSummary.week.teacherNotes ||
     "Your teacher will add personal notes here for this week's practice.";
   document.querySelector("#streak-count").textContent = state.streak;
   document.querySelector("#review-count").textContent = `${state.reviews} received`;
   document.querySelector("#avatar-button").textContent = initial;
-  document.querySelector("#home-morning-status").textContent = state.coursePlan?.morningRequired
-    ? (morningSubmitted ? "Submitted for teacher review" : "Due by 9:00 AM")
-    : "Not required in your plan";
-  document.querySelector("#home-evening-status").textContent = state.coursePlan?.eveningRequired
-    ? (eveningSubmitted ? "Submitted for teacher review" : "Due by 8:00 PM")
-    : "Not required in your plan";
-  document.querySelector("#daily-ring").textContent = `${submittedCount}/${requiredPeriods.length}`;
+  document.querySelector("#home-morning-status").textContent = submitted
+    ? (daily.status === "reviewed" ? "Reviewed by your teacher" : `Waiting for review. Expected before ${expectedReviewCopy(daily.uploadedAt)}`)
+    : `${mission.title} - Due ${mission.due}`;
+  document.querySelector("#daily-ring").textContent = `${submitted ? 1 : 0}/1`;
 
   const morningItem = document.querySelector("#home-morning-item");
   const eveningItem = document.querySelector("#home-evening-item");
-  morningItem.classList.toggle("is-complete", morningSubmitted);
-  eveningItem.classList.toggle("is-complete", eveningSubmitted);
-  morningItem.querySelector(".check-icon").textContent = morningSubmitted ? "✓" : "1";
+  morningItem.classList.toggle("is-complete", submitted);
+  morningItem.querySelector(".check-icon").textContent = submitted ? "✓" : "1";
+  morningItem.querySelector("strong").textContent = submitted ? "Daily check-in submitted" : "Today's mission check-in";
+  morningItem.querySelector(".daily-time").textContent = "30-60 sec";
+  eveningItem.hidden = true;
   const sessionList = document.querySelector(".session-list");
   const teacher = teacherIdentity();
   sessionList.innerHTML = state.upcomingSessions.length
@@ -790,40 +841,33 @@ function renderHome() {
       `;
     }).join("")
     : '<p class="empty-state">No upcoming live sessions.</p>';
-  eveningItem.querySelector(".check-icon").textContent = eveningSubmitted ? "✓" : "2";
   renderGamification();
 }
 
 function renderGamification() {
   const firstName = (state.profile.name || "Student").trim().split(/\s+/)[0] || "Student";
   const goalSummary = weeklyGoalSummary();
-  const practiceMinutes = Number(state.coursePlan?.practiceMinutes || Math.round(state.practiceGate.minDurationSeconds / 60) || 7);
-  const submitted = {
-    morning: ["submitted", "reviewed"].includes(state.checkins.morning.status),
-    evening: ["submitted", "reviewed"].includes(state.checkins.evening.status)
-  };
-  const morningRequired = state.coursePlan?.morningRequired !== false;
-  const eveningRequired = state.coursePlan?.eveningRequired !== false;
+  const mission = dailyMissionFromWeek();
+  const submitted = dailySubmitted();
 
   document.querySelector("#welcome-quest-title").textContent = `${firstName}, your guitar journey has started.`;
   document.querySelector("#welcome-quest-copy").textContent = state.practiceGate.locked
-    ? `Submit a practice pod to open today's riff gate. Aim for ${practiceMinutes} mins for full progress points.`
+    ? `Start the guided ${mission.minutes}-minute mission, then upload one short check-in.`
     : "Performer path unlocked. Tiny practice, repeated daily, becomes stage confidence.";
 
-  [
-    ["morning", morningRequired, "Morning riff pod complete", "Record or upload morning practice"],
-    ["evening", eveningRequired, "Evening rhythm pod complete", "Record or upload evening practice"]
-  ].forEach(([period, required, completeText, pendingText]) => {
-    const pod = document.querySelector(`[data-quest-pod="${period}"]`);
-    const status = document.querySelector(`#${period}-quest-status`);
-    if (!required) {
-      pod.classList.add("is-complete");
-      status.textContent = "Not required today";
-      return;
-    }
-    pod.classList.toggle("is-complete", submitted[period]);
-    status.textContent = submitted[period] ? completeText : pendingText;
-  });
+  const missionPod = document.querySelector(`[data-quest-pod="${DAILY_CHECKIN_PERIOD}"]`);
+  const missionStatus = document.querySelector("#morning-quest-status");
+  const eveningPod = document.querySelector('[data-quest-pod="evening"]');
+  if (missionPod) {
+    missionPod.classList.toggle("is-complete", submitted);
+    missionPod.querySelector("strong").textContent = submitted ? "Daily check-in complete" : mission.title;
+  }
+  if (missionStatus) {
+    missionStatus.textContent = submitted
+      ? `Waiting for teacher review before ${expectedReviewCopy(dailyStatus().uploadedAt)}`
+      : `Do ${mission.minutes} mins, then upload your best 30-60 seconds`;
+  }
+  if (eveningPod) eveningPod.hidden = true;
 
   const weeklyActivityTarget = goalSummary.targetPods;
   const localPracticeCount = goalSummary.completedPods;
@@ -879,8 +923,8 @@ function renderGamification() {
   }
   if (performerCopy) {
     performerCopy.textContent = leaderboardReady
-      ? "Do not compete with others. See where you stand, celebrate the group progress, and keep moving one practice pod at a time."
-      : "Move one practice pod forward at a time. This path shows your weekly activity and the next stage you are working toward.";
+      ? "Do not compete with others. See where you stand, celebrate the group progress, and keep moving one check-in at a time."
+      : "Move one daily check-in forward at a time. This path shows your weekly activity and the next stage you are working toward.";
   }
   if (roadmapActionTitle) {
     roadmapActionTitle.textContent = leaderboardReady
@@ -916,7 +960,7 @@ function renderGamification() {
   document.querySelector("#weekly-activity-message").textContent = weeklyActivityCount >= weeklyActivityTarget
     ? "Mission complete! You are a goal-crushing performer."
     : weeklyActivityCount === 0
-      ? "Start with one practice pod today. Your performer path wakes up after the first upload."
+      ? "Start with one daily check-in today. Your performer path wakes up after the first upload."
       : `${weeklyActivityTarget - weeklyActivityCount} more activity ${weeklyActivityTarget - weeklyActivityCount === 1 ? "step" : "steps"} to finish this week's stage.`;
   document.querySelector("#activity-mini-track").innerHTML = Array.from({ length: weeklyActivityTarget }, (_, index) => `
     <span class="${index < weeklyActivityCount ? "is-complete" : ""} ${index === weeklyActivityCount ? "is-current" : ""}"></span>
@@ -974,7 +1018,7 @@ function renderGamification() {
     <article class="fame-card ${student.is_current_student ? "is-you" : ""}">
       <span class="fame-ring">${initialFor(student)}</span>
       <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
-      <small>Week ${student.current_week} - ${student.weekly_submissions}/${weeklyActivityTarget} pods</small>
+      <small>Week ${student.current_week} - ${student.weekly_submissions}/${weeklyActivityTarget} check-ins</small>
       <em>${index === 0 ? "Lead performer" : index === 1 ? "Steady mover" : "Rising player"}</em>
     </article>
   `).join("");
@@ -1001,7 +1045,7 @@ function renderGamification() {
         <strong>${escapeHtml(student.name)}${student.is_current_student ? " (You)" : ""}</strong>
         <small>${escapeHtml(student.instrument || "Guitar")} - Week ${student.current_week || 1}</small>
       </div>
-      <span class="leaderboard-score">${student.weekly_submissions || 0}/${weeklyActivityTarget} pods</span>
+      <span class="leaderboard-score">${student.weekly_submissions || 0}/${weeklyActivityTarget} check-ins</span>
     </article>
   `).join("");
 }
@@ -1015,9 +1059,8 @@ function renderCourse() {
   document.querySelector("#course-progress-percent").textContent = `${progress}%`;
   document.querySelector("#course-summary-weeks").textContent = plan.totalWeeks;
   document.querySelector("#course-summary-sessions").textContent = plan.totalWeeks * 2;
-  const dailyUploads = Number(plan.morningRequired) + Number(plan.eveningRequired);
-  document.querySelector("#course-summary-practice").textContent = plan.totalWeeks * 7 * dailyUploads;
-  document.querySelector("#course-description").textContent = `${plan.practiceMinutes}-minute practice check-ins are set specifically for your learning plan.`;
+  document.querySelector("#course-summary-practice").textContent = plan.totalWeeks * 7;
+  document.querySelector("#course-description").textContent = `One guided ${DAILY_MISSION_MINUTES}-minute mission per day, followed by one short check-in for your teacher.`;
 
   weekList.innerHTML = weeks.slice(0, plan.totalWeeks).map((week, index) => {
     const weekNumber = index + 1;
@@ -1048,7 +1091,7 @@ function renderCourse() {
           <div class="week-milestone">
             <strong>Week goal</strong>
             <p>${escapeHtml(week.weekly_goal || week.weeklyGoal || week.milestone)}</p>
-            <small>${escapeHtml(week.target_pods || week.targetPods || 4)} target practice pods this week</small>
+            <small>${escapeHtml(week.target_pods || week.targetPods || 4)} target daily check-ins this week</small>
             ${week.teacher_notes || week.teacherNotes ? `<small class="week-teacher-note">Teacher notes: ${escapeHtml(week.teacher_notes || week.teacherNotes)}</small>` : ""}
             ${week.milestone ? `<small>Milestone: ${escapeHtml(week.milestone)}</small>` : ""}
             ${week.practice_instructions || week.practiceInstructions ? `<small>${escapeHtml(week.practice_instructions || week.practiceInstructions)}</small>` : ""}
@@ -1061,33 +1104,30 @@ function renderCourse() {
 }
 
 function renderCheckins() {
-  const practiceMinutes = Number(state.coursePlan?.practiceMinutes || Math.round(state.practiceGate.minDurationSeconds / 60) || 7);
-  const targetSeconds = Math.max(60, Math.round(practiceMinutes * 60));
-  const requiredPeriods = [
-    state.coursePlan?.morningRequired ? "morning" : null,
-    state.coursePlan?.eveningRequired ? "evening" : null
-  ].filter(Boolean);
-  document.querySelector("#practice-plan-title").textContent = requiredPeriods.length
-    ? `${requiredPeriods.length === 2 ? "Two videos" : "One video"}. ${practiceMinutes} mins of focus.`
-    : "Your teacher has not assigned a daily upload.";
-  document.querySelector("#practice-plan-description").textContent = requiredPeriods.length
-    ? `Aim for ${practiceMinutes} mins. Even a 1-minute practice can be submitted for review and earns partial progress points.`
-    : "You can continue with your course and live sessions.";
+  const mission = dailyMissionFromWeek();
+  const targetSeconds = DAILY_CHECKIN_TARGET_SECONDS;
+  document.querySelector("#practice-plan-title").textContent = "One guided mission. One short check-in.";
+  document.querySelector("#practice-plan-description").textContent =
+    `Practise for ${mission.minutes} minutes, then upload your best 30-60 seconds. Longer videos are okay, but only one daily check-in is required.`;
+  const teacherFocus = document.querySelector(".teacher-focus p");
+  if (teacherFocus) teacherFocus.textContent = mission.instruction;
 
   ["morning", "evening"].forEach((period) => {
     const checkin = state.checkins[period];
     const badge = document.querySelector(`#${period}-status-badge`);
     const preview = document.querySelector(`#${period}-preview`);
-    const required = period === "morning" ? state.coursePlan?.morningRequired : state.coursePlan?.eveningRequired;
+    const required = period === DAILY_CHECKIN_PERIOD;
     const removeButton = document.querySelector(`[data-remove-upload="${period}"]`);
     const submitButton = document.querySelector(`[data-submit-upload="${period}"]`);
     const progress = uploadProgress[period];
     document.querySelector(`[data-period="${period}"]`).hidden = !required;
-    document.querySelector(`#${period}-practice-requirement`).textContent = `${practiceMinutes}-minute focus goal`;
+    const eyebrow = document.querySelector(`[data-period="${period}"] .upload-heading .eyebrow`);
+    if (eyebrow) eyebrow.textContent = "DAILY CHECK-IN";
+    document.querySelector(`#${period}-practice-requirement`).textContent = "30-60 second practice check-in";
     removeButton.hidden = checkin.status !== "submitted" || !checkin.id;
     submitButton.hidden = checkin.status !== "selected" && !progress;
     submitButton.disabled = Boolean(progress);
-    submitButton.textContent = progress ? "Uploading..." : `Submit ${period} video`;
+    submitButton.textContent = progress ? "Uploading..." : "Submit daily check-in";
 
     badge.className = "upload-status";
     if (checkin.status === "reviewed") {
@@ -1127,8 +1167,8 @@ function renderCheckins() {
     } else {
       preview.innerHTML = `
         <span class="video-placeholder-icon">+</span>
-        <strong id="${period}-file-label">Record or upload a video</strong>
-        <small id="${period}-upload-time">${period === "morning" ? "Due by 9:00 AM" : "Due by 8:00 PM"}</small>
+        <strong id="${period}-file-label">Record or upload your check-in</strong>
+        <small id="${period}-upload-time">Due by 8:00 PM</small>
         ${uploadProgressHtml(period)}
       `;
       preview.classList.add("is-empty");
@@ -1275,7 +1315,7 @@ async function acceptPracticeVideo(period, file, knownDurationSeconds = null) {
     return false;
   }
 
-  const targetSeconds = state.practiceGate.minDurationSeconds || 420;
+  const targetSeconds = DAILY_CHECKIN_TARGET_SECONDS;
   const minimumSeconds = state.practiceGate.minSubmitSeconds || MIN_SUBMIT_PRACTICE_SECONDS;
   if (durationSeconds < minimumSeconds) {
     showToast("Record or upload at least 1 minute so your teacher has something useful to review.");
@@ -1450,7 +1490,7 @@ async function submitUpload(period) {
     const now = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date());
     state.checkins[period].status = "submitted";
     state.checkins[period].time = now;
-    if (period === "evening") state.streak = Math.max(state.streak, 7);
+    state.streak = Math.max(state.streak, 7);
     saveState();
     button.hidden = true;
     if (temporaryVideoUrls[period]) URL.revokeObjectURL(temporaryVideoUrls[period]);
@@ -1458,9 +1498,7 @@ async function submitUpload(period) {
     delete selectedPracticeFiles[period];
     await syncStudentFromBackend();
     clearUploadProgress(period);
-    showToast(backendWarning || (period === "morning"
-      ? "Morning Ninja unlocked. Course energy is building."
-      : "Evening Finisher unlocked. Strong close today."));
+    showToast(backendWarning || `Daily check-in submitted. Your teacher will review it before ${expectedReviewCopy()}.`);
   } catch (error) {
     setUploadProgress(period, 0, "Upload failed. Please try again.");
     showToast(error.message);
@@ -1733,7 +1771,7 @@ function bindEvents() {
 
   document.querySelector("#practice-gate-upload").addEventListener("click", () => {
     document.querySelector("#practice-gate").hidden = true;
-    openCheckinPeriod(state.practiceGate.activePeriod || "morning");
+    openCheckinPeriod(DAILY_CHECKIN_PERIOD);
   });
 
   document.querySelector("#practice-gate-snooze").addEventListener("click", () => {

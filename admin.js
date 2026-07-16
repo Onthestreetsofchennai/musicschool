@@ -656,8 +656,8 @@ async function loadCoursePlan(studentId) {
   document.querySelector("#course-title").value = activeCoursePlan.course_title;
   document.querySelector("#course-total-weeks").value = activeCoursePlan.total_weeks;
   document.querySelector("#course-practice-minutes").value = activeCoursePlan.practice_minutes;
-  document.querySelector("#course-morning-required").checked = activeCoursePlan.morning_required;
-  document.querySelector("#course-evening-required").checked = activeCoursePlan.evening_required;
+  document.querySelector("#course-morning-required").checked = true;
+  document.querySelector("#course-evening-required").checked = false;
   renderCourseWeekEditor();
   focusPendingCoursePlanField();
 }
@@ -730,7 +730,7 @@ function renderCourseWeekEditor() {
         <textarea data-week-field="weeklyGoal" rows="2">${escapeHtml(week.weekly_goal || week.weeklyGoal || week.milestone || "")}</textarea>
       </label>
       <label>
-        Target practice pods this week
+        Target daily check-ins this week
         <input data-week-field="targetPods" type="number" min="1" max="28" value="${escapeHtml(week.target_pods || week.targetPods || 4)}">
       </label>
       <label>
@@ -1178,6 +1178,9 @@ function bindEvents() {
     button.addEventListener("click", () => navigateAdmin(button.dataset.adminView));
   });
 
+  document.querySelector("#admin-brand-home")?.addEventListener("click", () => navigateAdmin("dashboard"));
+  document.querySelector("#admin-avatar")?.addEventListener("click", () => navigateAdmin("dashboard"));
+
   document.querySelector("#refresh-dashboard").addEventListener("click", async () => {
     await loadDashboard();
     showToast("Dashboard refreshed.");
@@ -1269,8 +1272,10 @@ function renderAdminUser() {
   if (!adminUser) return;
   document.querySelector("#admin-user-name").textContent = adminUser.name;
   document.querySelector("#admin-user-role").textContent = adminUser.role.replaceAll("_", " ");
-  document.querySelector("#admin-avatar").innerHTML = `<img src="${assetUrl("brand-logo-transparent.png")}" alt="On The Streets">`;
-  document.querySelector("#admin-avatar").title = initials(adminUser.name);
+  const avatar = document.querySelector("#admin-avatar");
+  avatar.innerHTML = `<img src="${assetUrl("brand-logo-transparent.png")}" alt="On The Streets">`;
+  avatar.title = `${initials(adminUser.name)} - go to Dashboard`;
+  avatar.classList.add("has-logo");
   document.querySelector("#open-create-student").hidden = adminUser.role === "teacher";
   document.querySelector("#staff-nav-item").hidden = adminUser.role !== "super_admin";
   document.querySelector(".admin-brand small").textContent = adminUser.role === "teacher"
