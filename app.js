@@ -1,7 +1,9 @@
 const STORAGE_KEY = "musicSchoolOTSStateV1";
 const STUDENT_TOKEN_KEY = "otsStudentToken";
 const WELCOME_SEEN_PREFIX = "otsWelcomeSeen:";
-const WORKER_API_ORIGIN = window.OTS_TEST_API_ORIGIN || "";
+const WORKER_API_ORIGIN =
+  window.OTS_TEST_API_ORIGIN ||
+  "https://music-school-ots.sharoncornerstone56.workers.dev";
 const GOOGLE_MEET_CREATE_URL = "https://meet.google.com/new";
 const GOOGLE_MEET_NICKNAME_PREFIX = "ots-music-school-student";
 const API_ORIGIN = (() => {
@@ -1542,19 +1544,46 @@ async function submitUpload(period) {
 
 async function removePendingSubmission(submissionId) {
   if (!submissionId) return;
+
+  const submissionIdText = String(submissionId);
+  const isLocalSubmission = submissionIdText.startsWith("local-");
+
   try {
-    const result = await apiRequest(`/api/student/me/practice-submissions/${submissionId}`, {
-      method: "DELETE"
-    });
-    state.recentSubmissions = state.recentSubmissions.filter((submission) => String(submission.id) !== String(submissionId));
+    let result = {};
+
+    if (!isLocalSubmission) {
+      result = await apiRequest(
+        `/api/student/me/practice-submissions/${submissionIdText}`,
+        {
+          method: "DELETE"
+        }
+      );
+    }
+
+    state.recentSubmissions = state.recentSubmissions.filter(
+      (submission) => String(submission.id) !== submissionIdText
+    );
+
     Object.values(state.checkins).forEach((checkin) => {
-      if (String(checkin.id) === String(submissionId)) {
-        Object.assign(checkin, { id: null, status: "pending", fileName: "", time: "", durationSeconds: 0, uploadedAt: "" });
+      if (String(checkin.id) === submissionIdText) {
+        Object.assign(checkin, {
+          id: null,
+          status: "pending",
+          fileName: "",
+          time: "",
+          durationSeconds: 0,
+          uploadedAt: ""
+        });
       }
     });
+
     saveState();
     renderCheckins();
-    await syncStudentFromBackend();
+
+    if (!isLocalSubmission) {
+      await syncStudentFromBackend();
+    }
+
     showToast(result.warning || "Pending practice upload removed.");
   } catch (error) {
     showToast(error.message);
@@ -1782,7 +1811,7 @@ function bindEvents() {
 
     const submissionRemoveButton = event.target.closest(".remove-submission");
     if (submissionRemoveButton) {
-      await removePendingSubmission(Number(submissionRemoveButton.dataset.submissionId));
+     await removePendingSubmission(submissionRemoveButton.dataset.submissionId);
       return;
     }
 

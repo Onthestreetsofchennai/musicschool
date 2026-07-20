@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-ots-music-school-v46-state-motion-emotes";
+const CACHE_NAME = "the-ots-music-school-v47-api-fix";
 const APP_ASSETS = [
   "./",
   "./index.html",
