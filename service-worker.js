@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-ots-music-school-v41-five-emotes";
+const CACHE_NAME = "the-ots-music-school-v42-motion-emote";
 const APP_ASSETS = [
   "./",
   "./index.html",
@@ -7,6 +7,7 @@ const APP_ASSETS = [
   "./guitar-companion.css",
   "./guitar-companion.js",
   "./guitar-duo-mascot.png",
+  "./guitar-emote-spin-twirl.mp4",
   "./manifest.webmanifest",
   "./favicon-16x16.png",
   "./favicon-32x32.png",

@@ -5,6 +5,10 @@
     "guitar-duo-mascot.png",
     document.currentScript?.src || location.href
   ).href;
+  const MOTION_URL = new URL(
+    "guitar-emote-spin-twirl.mp4",
+    document.currentScript?.src || location.href
+  ).href;
   const messages = [
     "One calm minute can start a great riff.",
     "Small practice. Big stage energy.",
@@ -45,6 +49,21 @@
     `;
     document.body.append(companion);
 
+    const motionOverlay = document.createElement("section");
+    motionOverlay.id = "ots-guitar-motion-emote";
+    motionOverlay.className = "guitar-motion-emote";
+    motionOverlay.hidden = true;
+    motionOverlay.innerHTML = `
+      <div class="guitar-motion-emote-shell" role="dialog" aria-modal="true" aria-labelledby="guitar-motion-emote-message">
+        <button class="guitar-motion-emote-close" type="button" aria-label="Skip celebration">Skip</button>
+        <video class="guitar-motion-emote-video" muted playsinline preload="auto" poster="${ASSET_URL}">
+          <source src="${MOTION_URL}" type="video/mp4">
+        </video>
+        <p class="guitar-motion-emote-message" id="guitar-motion-emote-message" aria-live="assertive">Daily mission complete!</p>
+      </div>
+    `;
+    document.body.append(motionOverlay);
+
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (stored && Number.isFinite(stored.left) && Number.isFinite(stored.top)) {
       companion.style.left = `${clamp(stored.left, 8, innerWidth - companion.offsetWidth - 8)}px`;
@@ -56,6 +75,8 @@
     let drag = null;
     let moved = false;
     let animationTimer = null;
+    let motionTimer = null;
+    let motionHideTimer = null;
 
     const selectEmote = (requestedId = "") => {
       const requested = emotes.find((emote) => emote.id === requestedId);
@@ -83,7 +104,46 @@
     };
 
     const play = () => runEmote();
-    const celebrate = (detail = {}) => runEmote({ ...detail, celebrate: true });
+    const closeMotionEmote = () => {
+      window.clearTimeout(motionTimer);
+      motionOverlay.classList.remove("is-visible");
+      const video = motionOverlay.querySelector(".guitar-motion-emote-video");
+      video.pause();
+      window.clearTimeout(motionHideTimer);
+      motionHideTimer = window.setTimeout(() => {
+        motionOverlay.hidden = true;
+        video.currentTime = 0;
+      }, 260);
+    };
+
+    const playMotionEmote = (detail = {}) => {
+      const selected = selectEmote(detail.emote || "");
+      const video = motionOverlay.querySelector(".guitar-motion-emote-video");
+      const messageElement = motionOverlay.querySelector(".guitar-motion-emote-message");
+      window.clearTimeout(motionTimer);
+      window.clearTimeout(motionHideTimer);
+      companion.classList.remove("is-playing", "is-celebrating");
+      motionOverlay.dataset.emote = selected.id;
+      messageElement.textContent = detail.message || selected.message;
+      motionOverlay.hidden = false;
+      motionOverlay.classList.remove("is-visible");
+      void motionOverlay.offsetWidth;
+      motionOverlay.classList.add("is-visible");
+      video.currentTime = 0;
+      const playback = video.play();
+      if (playback?.catch) {
+        playback.catch(() => {
+          closeMotionEmote();
+          runEmote({ ...detail, celebrate: true });
+        });
+      }
+      motionTimer = window.setTimeout(closeMotionEmote, 6500);
+    };
+
+    const celebrate = (detail = {}) => {
+      if (detail.motion === false) runEmote({ ...detail, celebrate: true });
+      else playMotionEmote(detail);
+    };
 
     window.OTSCompanion = Object.freeze({
       play,
@@ -91,6 +151,11 @@
       emotes: emotes.map(({ id, label }) => ({ id, label }))
     });
     window.addEventListener("ots:task-completed", (event) => celebrate(event.detail || {}));
+    motionOverlay.querySelector(".guitar-motion-emote-video").addEventListener("ended", closeMotionEmote);
+    motionOverlay.querySelector(".guitar-motion-emote-close").addEventListener("click", closeMotionEmote);
+    motionOverlay.addEventListener("click", (event) => {
+      if (event.target === motionOverlay) closeMotionEmote();
+    });
 
     const authPanels = [...document.querySelectorAll("#student-auth, #admin-login")];
     let wasHiddenForAuth = false;
