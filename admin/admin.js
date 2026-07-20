@@ -1,5 +1,5 @@
 const ADMIN_TOKEN_KEY = "otsAdminToken";
-const WORKER_API_ORIGIN = "https://music-school-ots.sharoncornerstone56.workers.dev";
+const WORKER_API_ORIGIN = window.OTS_API_ORIGIN || "https://music-school-ots.sharoncornerstone56.workers.dev";
 const API_ORIGIN = (() => {
   const host = window.location.hostname;
   if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".workers.dev")) return "";
@@ -17,6 +17,11 @@ let adminStudents = [];
 let adminSessions = [];
 let activeCoursePlan = null;
 let pendingCoursePlanFocus = null;
+let journeyStudents = [];
+let journeyApprovalData = { students: [], summary: {} };
+let activeJourneyStudentId = 0;
+let activeJourneyWeek = 0;
+let adminActivityEntries = [];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -158,14 +163,16 @@ function navigateAdmin(viewName) {
     button.classList.toggle("is-active", button.dataset.adminView === navView);
   });
   const activeView = document.querySelector(`#admin-view-${viewName}`);
-  document.querySelector("#admin-page-title").textContent = activeView?.dataset.title || "OTS Admin";
+  document.querySelector("#admin-page-title").textContent = activeView?.dataset.title || "THE OTS MUSIC SCHOOL Admin";
   window.scrollTo({ top: 0, behavior: "smooth" });
 
   if (viewName === "students") loadStudents();
   if (viewName === "staff" && adminUser?.role === "super_admin") loadStaff();
   if (viewName === "sessions") loadSessions();
   if (viewName === "courses") loadCoursePlanStudents();
+  if (viewName === "journey") loadJourneyControl();
   if (viewName === "reviews") loadReviews();
+  if (viewName === "activity") loadActivityLog();
   if (viewName === "alerts") loadAlerts();
 }
 
@@ -392,11 +399,11 @@ function roleLabel(role) {
 }
 
 function canRemoveStudents() {
-  return ["super_admin", "academic_head", "operations"].includes(adminUser?.role);
+  return ["super_admin", "academic_head"].includes(adminUser?.role);
 }
 
 function canManageTeacherAssignments() {
-  return ["super_admin", "academic_head", "operations"].includes(adminUser?.role);
+  return ["super_admin", "academic_head"].includes(adminUser?.role);
 }
 
 function canRemoveStaff() {
@@ -564,7 +571,7 @@ async function loadSessions() {
         <td>
           <div class="session-actions">
             <a class="row-action" href="${liveClassroomUrl(sessionRoomName(session), session.student_id)}" target="_blank" rel="noopener">Join Google Meet</a>
-            <button class="row-action edit-session" data-session-id="${session.id}">Edit</button>
+            ${adminUser?.role === "operations" ? "" : `<button class="row-action edit-session" data-session-id="${session.id}">Edit</button>`}
           </div>
         </td>
       </tr>
@@ -955,12 +962,12 @@ async function openStudent(studentId) {
             <h3>Teacher notes for student</h3>
             <p class="field-hint">This note appears on the student's dashboard for Week ${notesSummary.weekNumber}.</p>
           </div>
-          <button
+          ${adminUser?.role === "operations" ? "" : `<button
             class="admin-button primary edit-student-notes"
             data-student-id="${student.id}"
             data-week-number="${notesSummary.weekNumber}"
             type="button"
-          >Edit week goal and notes</button>
+          >Edit week goal and notes</button>`}
         </div>
         <div class="teacher-notes-preview">
           <span>Week ${notesSummary.weekNumber} goal</span>
@@ -1056,6 +1063,53 @@ async function loadReviews() {
     : '<div class="empty-state">The review queue is clear.</div>';
 }
 
+function activityLabel(type) {
+  return {
+    practice_review: "Review",
+    journey: "Journey",
+    milestone: "Milestone",
+    attendance: "Attendance",
+    live_session: "Live session"
+  }[type] || "Activity";
+}
+
+function renderActivityLog() {
+  const type = document.querySelector("#activity-type-filter")?.value || "all";
+  const search = document.querySelector("#activity-search")?.value.trim().toLowerCase() || "";
+  const entries = adminActivityEntries.filter((entry) => {
+    if (type !== "all" && entry.activity_type !== type) return false;
+    if (!search) return true;
+    return [entry.actor_name, entry.student_name, entry.action, entry.detail, entry.actor_role]
+      .some((value) => String(value || "").toLowerCase().includes(search));
+  });
+  document.querySelector("#activity-log-list").innerHTML = entries.length
+    ? entries.map((entry) => `
+      <article class="activity-log-card">
+        <span class="activity-type-icon ${escapeHtml(entry.activity_type)}">${escapeHtml(activityLabel(entry.activity_type).slice(0, 1))}</span>
+        <div class="activity-log-copy">
+          <div class="activity-log-heading">
+            <strong>${escapeHtml(entry.action)}</strong>
+            <span>${escapeHtml(activityLabel(entry.activity_type))}</span>
+          </div>
+          <p><b>${escapeHtml(entry.actor_name || "System")}</b> (${escapeHtml(String(entry.actor_role || "system").replaceAll("_", " "))}) · ${escapeHtml(entry.student_name || "School-wide")}${entry.week_number ? ` · Week ${Number(entry.week_number)}` : ""}</p>
+          ${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ""}
+        </div>
+        <time datetime="${escapeHtml(entry.created_at)}">${formatDateTime(entry.created_at)}</time>
+      </article>
+    `).join("")
+    : '<div class="empty-state">No activity matches these filters.</div>';
+}
+
+async function loadActivityLog() {
+  const data = await api("/api/admin/activity-log?limit=150");
+  adminActivityEntries = data.entries || [];
+  document.querySelector("#activity-total").textContent = data.summary?.total || 0;
+  document.querySelector("#activity-reviews").textContent = data.summary?.reviews || 0;
+  document.querySelector("#activity-teachers").textContent = data.summary?.teachers || 0;
+  document.querySelector("#activity-students").textContent = data.summary?.students || 0;
+  renderActivityLog();
+}
+
 async function openReview(button) {
   document.querySelector("#review-submission-id").value = button.dataset.submissionId;
   document.querySelector("#review-modal-title").textContent = `${button.dataset.studentName}'s ${button.dataset.period} practice`;
@@ -1136,7 +1190,7 @@ async function loadAlerts() {
         </div>
         <div class="alert-actions">
           <button class="row-action open-student" data-student-id="${alert.student_id}">Open student</button>
-          <button class="row-action resolve-alert" data-alert-id="${alert.id}">Resolve</button>
+          ${adminUser?.role === "operations" ? "" : `<button class="row-action resolve-alert" data-alert-id="${alert.id}">Resolve</button>`}
         </div>
       </article>
     `).join("")
@@ -1147,6 +1201,360 @@ async function resolveAlert(alertId) {
   await api(`/api/alerts/${alertId}/resolve`, { method: "POST", body: "{}" });
   showToast("Alert resolved.");
   await Promise.all([loadAlerts(), loadDashboard()]);
+}
+
+function journeyCanAdmin() {
+  return ["super_admin", "academic_head"].includes(adminUser?.role);
+}
+
+function journeyCanEdit() {
+  return ["super_admin", "academic_head", "teacher"].includes(adminUser?.role);
+}
+
+function weekdayOptions(selected = 1) {
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    .map((day, index) => `<option value="${index}" ${Number(selected) === index ? "selected" : ""}>${day}</option>`).join("");
+}
+
+function milestoneStatusOptions(selected = "not_started") {
+  return [
+    ["not_started", "Not started"], ["learning", "Learning"], ["developing", "Developing"],
+    ["achieved", "Achieved"], ["teacher_approved", "Teacher approved"]
+  ].map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function liveStatusOptions(selected = "upcoming") {
+  return ["upcoming", "present", "partial", "absent", "excused", "cancelled", "rescheduled"]
+    .map((value) => `<option value="${value}" ${selected === value ? "selected" : ""}>${value.replaceAll("_", " ")}</option>`).join("");
+}
+
+function practiceStatusOptions(selected = "pending") {
+  return ["pending", "present", "late", "absent", "excused", "not_scheduled", "processing", "upload_issue"]
+    .map((value) => `<option value="${value}" ${selected === value ? "selected" : ""}>${value.replaceAll("_", " ")}</option>`).join("");
+}
+
+function journeyTeacherOptions(selectedId = 0) {
+  return enrollmentTeachers.map((teacher) => `<option value="${teacher.id}" ${Number(selectedId) === Number(teacher.id) ? "selected" : ""}>${escapeHtml(teacher.name)} - ${escapeHtml(teacher.instrument)}</option>`).join("");
+}
+
+function renderConfirmationBuilders(student) {
+  document.querySelector("#journey-confirmation-slots").innerHTML = [
+    { weekday: 1, time: "17:00" }, { weekday: 3, time: "17:00" }, { weekday: 5, time: "17:00" }
+  ].map((slot, index) => `
+    <article class="journey-slot-card" data-confirmation-slot>
+      <strong>Session ${index + 1}</strong>
+      <label>Teacher<select data-field="teacherId">${journeyTeacherOptions(student.assigned_teacher_id)}</select></label>
+      <label>Weekday<select data-field="weekday">${weekdayOptions(slot.weekday)}</select></label>
+      <label>Start time<input data-field="startTime" type="time" value="${slot.time}" required></label>
+      <label>Duration<input data-field="durationMinutes" type="number" min="15" max="180" value="45" required></label>
+      <label>Google Meet link<input data-field="meetingLink" type="url" value="${standardGoogleMeetLink(student.id)}" required></label>
+    </article>
+  `).join("");
+  const defaults = [
+    ["Rhythm", 35], ["Technique", 35], ["Performance confidence", 30]
+  ];
+  document.querySelector("#journey-confirmation-milestones").innerHTML = defaults.map(([name, weight]) => `
+    <article class="journey-milestone-card" data-confirmation-milestone>
+      <label>Milestone<input data-field="name" value="${escapeHtml(name)}" required></label>
+      <label>Weight<input data-field="weight" type="number" min="1" max="100" value="${weight}" required></label>
+      <label>Status<select data-field="status">${milestoneStatusOptions()}</select></label>
+      <label>Teacher score<input data-field="score" type="number" min="0" max="100" value="0" required></label>
+      <label>Existing progress note<textarea data-field="feedback" rows="2">Pending baseline assessment</textarea></label>
+    </article>
+  `).join("");
+}
+
+function updateConfirmationTargetDate() {
+  const start = document.querySelector("#journey-start-date").value;
+  const durationValue = document.querySelector("#journey-duration").value;
+  const duration = durationValue === "custom"
+    ? Number(document.querySelector("#journey-custom-duration").value)
+    : Number(durationValue);
+  if (!start || !duration) return;
+  const target = new Date(`${start}T00:00:00Z`);
+  target.setUTCDate(target.getUTCDate() + duration - 1);
+  document.querySelector("#journey-target-date").value = target.toISOString().slice(0, 10);
+}
+
+async function loadJourneyControl(selectedStudentId = activeJourneyStudentId) {
+  const [confirmations, approvals] = await Promise.all([
+    api("/api/journey/confirmations?status=all"), api("/api/week-approvals")
+  ]);
+  journeyStudents = confirmations.students;
+  journeyApprovalData = approvals;
+  const summary = approvals.summary || {};
+  const pending = journeyStudents.filter((student) => student.confirmation_status === "pending_confirmation").length;
+  document.querySelector("#journey-pending-count").textContent = pending;
+  document.querySelector("#journey-waiting-count").textContent = summary.waiting || 0;
+  document.querySelector("#journey-risk-count").textContent = summary.atRisk || 0;
+  document.querySelector("#journey-overdue-count").textContent = summary.overdue || 0;
+  document.querySelector("#nav-journey-count").textContent = pending + Number(summary.waiting || 0);
+  const selector = document.querySelector("#journey-student-select");
+  selector.innerHTML = '<option value="">Choose a student</option>' + journeyStudents.map((student) => `
+    <option value="${student.id}" ${Number(selectedStudentId) === Number(student.id) ? "selected" : ""}>
+      ${escapeHtml(student.name)} - ${student.confirmation_status === "confirmed" ? `Week ${student.current_week}` : "Pending confirmation"}
+    </option>
+  `).join("");
+  document.querySelector("#journey-role-note").textContent = adminUser?.role === "operations"
+    ? "Operations view is read-only. Academic changes remain locked."
+    : adminUser?.role === "teacher" ? "You can manage only students assigned to you." : "Admin controls include confirmation, program dates and manual overrides.";
+  renderJourneyApprovalQueue(approvals.students || []);
+  if (selectedStudentId) await openJourneyStudent(Number(selectedStudentId));
+}
+
+function renderJourneyApprovalQueue(rows) {
+  const list = document.querySelector("#journey-approval-list");
+  list.innerHTML = rows.length ? rows.map((row) => `
+    <button class="journey-queue-card open-journey-workspace" data-student-id="${row.student_id}" data-week="${row.week_number}" type="button">
+      <span class="journey-queue-status ${escapeHtml(row.status)}">${escapeHtml(row.status.replaceAll("_", " "))}</span>
+      <strong>${escapeHtml(row.student_name)} - Week ${row.week_number}</strong>
+      <small>${Math.round(row.readiness || 0)}% ready / ${escapeHtml(row.countdown?.message || "Target pending")}</small>
+      <span>${row.days_waiting || 0} days waiting${row.risk ? " / needs attention" : ""}</span>
+    </button>
+  `).join("") : '<div class="empty-state">No students are waiting for weekly action.</div>';
+}
+
+async function openJourneyStudent(studentId, requestedWeek = 0) {
+  activeJourneyStudentId = studentId;
+  const student = journeyStudents.find((item) => Number(item.id) === studentId);
+  if (!student) return;
+  document.querySelector("#journey-student-select").value = String(studentId);
+  const confirmationPanel = document.querySelector("#journey-confirmation-panel");
+  const workspacePanel = document.querySelector("#journey-workspace-panel");
+  if (student.confirmation_status !== "confirmed") {
+    workspacePanel.hidden = true;
+    confirmationPanel.hidden = !journeyCanAdmin();
+    if (!journeyCanAdmin()) {
+      document.querySelector("#journey-role-note").textContent = "This student is pending admin confirmation. Teacher actions remain locked.";
+      return;
+    }
+    await loadTeachers();
+    document.querySelector("#journey-primary-teacher").innerHTML = journeyTeacherOptions(student.assigned_teacher_id);
+    document.querySelector("#journey-course-template").value = `${student.instrument} performance plan`;
+    document.querySelector("#journey-start-date").value = student.course_start_date || new Date().toISOString().slice(0, 10);
+    document.querySelector("#journey-active-week").value = student.proposed_current_week || student.current_week || 1;
+    document.querySelector("#journey-completed-weeks").value = student.current_week > 1
+      ? Array.from({ length: student.current_week - 1 }, (_, index) => index + 1).join(", ") : "";
+    renderConfirmationBuilders(student);
+    updateConfirmationTargetDate();
+    return;
+  }
+  confirmationPanel.hidden = true;
+  const week = requestedWeek || student.current_week || student.proposed_current_week || 1;
+  activeJourneyWeek = week;
+  const workspace = await api(`/api/students/${studentId}/weeks/${week}/workspace`);
+  workspacePanel.hidden = false;
+  await renderJourneyWorkspace(workspace);
+}
+
+async function submitJourneyConfirmation(event) {
+  event.preventDefault();
+  const error = document.querySelector("#journey-confirmation-error");
+  error.hidden = true;
+  const durationSelection = document.querySelector("#journey-duration").value;
+  const durationDays = durationSelection === "custom"
+    ? Number(document.querySelector("#journey-custom-duration").value) : Number(durationSelection);
+  const completedWeeks = document.querySelector("#journey-completed-weeks").value.split(",")
+    .map((value) => Number(value.trim())).filter(Boolean);
+  const sessionSlots = [...document.querySelectorAll("[data-confirmation-slot]")].map((card) => ({
+    teacherId: Number(card.querySelector('[data-field="teacherId"]').value),
+    weekday: Number(card.querySelector('[data-field="weekday"]').value),
+    startTime: card.querySelector('[data-field="startTime"]').value,
+    durationMinutes: Number(card.querySelector('[data-field="durationMinutes"]').value),
+    meetingLink: card.querySelector('[data-field="meetingLink"]').value.trim()
+  }));
+  const existingMilestones = [...document.querySelectorAll("[data-confirmation-milestone]")].map((card) => ({
+    name: card.querySelector('[data-field="name"]').value.trim(),
+    weight: Number(card.querySelector('[data-field="weight"]').value),
+    status: card.querySelector('[data-field="status"]').value,
+    score: Number(card.querySelector('[data-field="score"]').value),
+    feedback: card.querySelector('[data-field="feedback"]').value.trim()
+  }));
+  try {
+    await api(`/api/students/${activeJourneyStudentId}/journey/confirm`, {
+      method: "POST",
+      body: JSON.stringify({
+        teacherId: Number(document.querySelector("#journey-primary-teacher").value),
+        courseTemplateName: document.querySelector("#journey-course-template").value.trim(),
+        programStartDate: document.querySelector("#journey-start-date").value,
+        durationDays,
+        customDuration: durationSelection === "custom",
+        targetPerformanceDate: document.querySelector("#journey-target-date").value,
+        activeWeek: Number(document.querySelector("#journey-active-week").value),
+        completedWeeks,
+        historicalCompletionReason: document.querySelector("#journey-history-reason").value.trim(),
+        existingMilestones,
+        sessionSlots,
+        dailyPracticeDeadline: document.querySelector("#journey-practice-deadline").value,
+        weeklyRestDay: Number(document.querySelector("#journey-rest-day").value),
+        bufferMinutes: Number(document.querySelector("#journey-buffer").value),
+        courseState: document.querySelector("#journey-course-state").value,
+        pauseReason: document.querySelector("#journey-pause-reason").value.trim(),
+        confirmationNotes: document.querySelector("#journey-confirmation-notes").value.trim()
+      })
+    });
+    showToast("Student journey confirmed. Teacher controls are now active.");
+    await loadJourneyControl(activeJourneyStudentId);
+  } catch (submitError) {
+    error.textContent = submitError.message;
+    error.hidden = false;
+  }
+}
+
+async function renderJourneyWorkspace(data) {
+  const content = document.querySelector("#journey-workspace-content");
+  const readOnly = !journeyCanEdit() || data.permissions?.canEdit === false;
+  const disabled = readOnly ? "disabled" : "";
+  const requirements = data.requirements || [];
+  const slotsData = await api(`/api/students/${data.student.id}/recurring-sessions`);
+  const combinedAudit = [
+    ...(data.audit || []).map((entry) => ({ ...entry, label: entry.action, detail: entry.reason })),
+    ...(data.attendanceAudit || []).map((entry) => ({ ...entry, label: `${entry.attendance_type} attendance: ${entry.previous_status || "new"} to ${entry.new_status}`, detail: entry.reason })),
+    ...(data.scheduleAudit || []).map((entry) => ({ ...entry, label: entry.change_type, detail: entry.reason })),
+    ...(data.milestoneAudit || []).map((entry) => ({ ...entry, label: `${entry.milestone_name}: ${entry.previous_status || "new"} to ${entry.new_status}`, detail: entry.feedback }))
+  ].sort((first, second) => new Date(second.created_at) - new Date(first.created_at));
+  if (journeyCanAdmin() && !enrollmentTeachers.length) await loadTeachers();
+  content.innerHTML = `
+    <div class="journey-workspace-hero">
+      <div><p class="eyebrow">WEEKLY APPROVAL WORKSPACE</p><h1>${escapeHtml(data.student.name)} - Week ${data.progress?.week_number || activeJourneyWeek}</h1><p>${escapeHtml(data.countdown?.message || "Performance date pending")}</p></div>
+      <div class="readiness-orb"><strong>${Math.round(data.readiness?.readiness || 0)}%</strong><span>performance readiness</span></div>
+    </div>
+    ${readOnly ? '<div class="journey-readonly-banner">View-only access. Academic controls are disabled.</div>' : ""}
+    <div class="journey-summary-grid">
+      <article><span>Status</span><strong>${escapeHtml((data.progress?.status || "pending").replaceAll("_", " "))}</strong></article>
+      <article><span>Days waiting</span><strong>${data.daysWaiting || 0}</strong></article>
+      <article><span>Live classes</span><strong>${data.liveSessions.filter((session) => ["present", "partial"].includes(session.attendance_status)).length}/3</strong></article>
+      <article><span>Practice days</span><strong>${data.practiceAttendance.filter((day) => ["present", "late"].includes(day.status)).length}/${requirements.find((item) => item.requirement_type === "practice_mission")?.required_count || 6}</strong></article>
+    </div>
+    <div class="journey-two-column">
+      <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">REQUIREMENTS</p><h2>Week evidence</h2></div></div>
+        <div class="journey-requirement-list">${requirements.map((item) => `
+          <article><div><strong>${escapeHtml(item.label)}</strong><small>${item.completed_count}/${item.required_count}${item.excused_at ? " / excused" : ""}</small></div>
+          ${!readOnly && !item.excused_at ? `<button class="row-action excuse-journey-requirement" data-id="${item.id}">Excuse</button>` : ""}</article>
+        `).join("") || '<div class="empty-state">No requirements configured.</div>'}</div>
+      </section>
+      <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">MISSIONS</p><h2>Assigned work</h2></div></div>
+        ${(data.missions || []).map((mission) => `<article class="journey-note-card"><strong>${escapeHtml(mission.title)}</strong><p>${escapeHtml(mission.instruction)}</p></article>`).join("") || '<div class="empty-state">No extra missions assigned.</div>'}
+      </section>
+    </div>
+    <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">ONE-TO-ONE SESSIONS</p><h2>Live-class attendance</h2></div></div>
+      <div class="journey-card-grid">${(data.liveSessions || []).map((session) => `
+        <form class="journey-action-card live-attendance-form" data-session-id="${session.id}">
+          <strong>${escapeHtml(session.topic)}</strong><small>${formatDateTime(session.scheduled_at)} / ${escapeHtml(session.teacher_name)}</small>
+          <label>Status<select name="status" ${disabled}>${liveStatusOptions(session.attendance_status || "upcoming")}</select></label>
+          <label>Attended minutes<input name="attendedMinutes" type="number" min="0" max="${session.duration_minutes}" value="${session.attended_minutes || 0}" ${disabled}></label>
+          <label>Reason<input name="reason" value="${escapeHtml(session.attendance_reason || "Attendance checked by teacher")}" ${disabled}></label>
+          ${readOnly ? "" : '<button class="admin-button secondary" type="submit">Save attendance</button>'}
+          ${readOnly ? "" : `<div class="journey-card-actions"><button class="row-action journey-session-action" data-session-action="reschedule" data-session-id="${session.id}" data-duration="${session.duration_minutes}" type="button">One-time reschedule</button><button class="row-action journey-session-action" data-session-action="makeup" data-session-id="${session.id}" data-duration="${session.duration_minutes}" type="button">Makeup</button><button class="row-action danger journey-session-action" data-session-action="cancel" data-session-id="${session.id}" type="button">Cancel</button></div>`}
+        </form>`).join("") || '<div class="empty-state">No individual sessions linked to this course week yet.</div>'}</div>
+    </section>
+    <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">PRACTICE EVIDENCE</p><h2>Videos and teacher feedback</h2></div></div>
+      <div class="journey-card-grid">${(data.submissions || []).map((submission) => `<article class="journey-action-card"><strong>${escapeHtml(submission.period)} practice</strong><small>${escapeHtml(submission.file_name)} / ${formatDateTime(submission.uploaded_at)}</small><span class="journey-queue-status ${escapeHtml(submission.review_status)}">${escapeHtml(submission.review_status)}${submission.feedback_id ? " / feedback saved" : ""}</span>${submission.review_status === "pending" && adminUser?.role !== "operations" ? `<button class="admin-button primary open-review" data-submission-id="${submission.id}" data-student-name="${escapeHtml(data.student.name)}" data-period="${escapeHtml(submission.period)}" data-file-name="${escapeHtml(submission.file_name)}" data-week="${submission.course_week}" type="button">Open video review</button>` : ""}</article>`).join("") || '<div class="empty-state">No videos submitted for this week.</div>'}</div>
+    </section>
+    <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">DAILY PRACTICE</p><h2>Practice attendance</h2></div></div>
+      <div class="journey-card-grid">${(data.practiceAttendance || []).map((day) => `
+        <form class="journey-action-card practice-attendance-form" data-date="${day.attendance_date}">
+          <strong>${escapeHtml(day.attendance_date)}</strong><label>Status<select name="status" ${disabled}>${practiceStatusOptions(day.status)}</select></label>
+          <label>Reason<input name="reason" value="${escapeHtml(day.reason || "Attendance checked by teacher")}" ${disabled}></label>
+          ${readOnly ? "" : '<button class="admin-button secondary" type="submit">Save attendance</button>'}
+        </form>`).join("") || '<div class="empty-state">No daily practice records for this week.</div>'}</div>
+      ${readOnly ? "" : `<form class="journey-inline-form" id="journey-new-practice-attendance"><label>Date<input name="date" type="date" required></label><label>Status<select name="status">${practiceStatusOptions()}</select></label><label>Reason<input name="reason" value="Manual attendance review" required></label><button class="admin-button secondary">Add attendance</button></form>`}
+    </section>
+    <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">TEACHER-ASSESSED</p><h2>Performance milestones</h2></div><strong>${Math.round(data.readiness?.calculated || 0)}% calculated</strong></div>
+      <div class="journey-milestone-grid">${(data.readiness?.milestones || []).map((milestone) => `
+        <form class="journey-milestone-card milestone-assessment-form" data-milestone-id="${milestone.id}">
+          <strong>${escapeHtml(milestone.name)}</strong><small>${milestone.weight}% weight / ${milestone.weighted_contribution}% contribution</small>
+          <label>Status<select name="status" ${disabled}>${milestoneStatusOptions(milestone.milestone_status || "not_started")}</select></label>
+          <label>Teacher score<input name="score" type="number" min="0" max="100" value="${milestone.teacher_score || 0}" ${disabled}></label>
+          <label>Feedback<textarea name="feedback" rows="2" ${disabled}>${escapeHtml(milestone.teacher_feedback || "Add an assessment note")}</textarea></label>
+          <small>Assessed by ${escapeHtml(milestone.assessed_by_name || "Not assessed")} ${milestone.approved_at ? `/ approved ${formatDateTime(milestone.approved_at)}` : ""}</small>
+          ${readOnly ? "" : '<button class="admin-button secondary" type="submit">Save assessment</button>'}
+        </form>`).join("") || '<div class="empty-state">No milestones configured.</div>'}</div>
+    </section>
+    <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">RECURRING SCHEDULE</p><h2>Three weekly class slots</h2></div></div>
+      <form id="journey-recurring-form"><div class="journey-slot-grid">${(slotsData.slots || []).map((slot, index) => `
+        <article class="journey-slot-card" data-recurring-slot><strong>Session ${index + 1}</strong>
+          <label>Teacher${journeyCanAdmin() ? `<select name="teacherId" ${disabled}>${journeyTeacherOptions(slot.teacher_id)}</select>` : `<input name="teacherId" value="${slot.teacher_id}" type="hidden"><input value="${escapeHtml(slot.teacher_name)}" disabled>`}</label>
+          <label>Weekday<select name="weekday" ${disabled}>${weekdayOptions(slot.weekday)}</select></label><label>Start<input name="startTime" type="time" value="${slot.start_time}" ${disabled}></label>
+          <label>Minutes<input name="durationMinutes" type="number" min="15" max="180" value="${slot.duration_minutes}" ${disabled}></label><label>Google Meet<input name="meetingLink" value="${escapeHtml(slot.meeting_link)}" ${disabled}></label>
+        </article>`).join("")}</div>
+        ${readOnly ? "" : '<div class="journey-inline-form"><label>Effective from<input name="effectiveFrom" type="date" required></label><label>Reason<input name="reason" value="Permanent schedule updated with student" required></label><button class="admin-button primary">Save permanent schedule</button></div>'}
+      </form>
+      <div class="journey-conflicts">${(slotsData.conflicts || []).map((conflict) => `<span>${escapeHtml(conflict.message)}</span>`).join("")}</div>
+      ${readOnly ? "" : `<form id="journey-unavailable-form" class="journey-inline-form"><label>Teacher${journeyCanAdmin() ? `<select name="teacherId">${journeyTeacherOptions(slotsData.slots?.[0]?.teacher_id)}</select>` : `<input name="teacherId" type="hidden" value="${slotsData.slots?.[0]?.teacher_id || ""}"><input value="${escapeHtml(slotsData.slots?.[0]?.teacher_name || "Assigned teacher")}" disabled>`}</label><label>Unavailable from<input name="unavailableFrom" type="datetime-local" required></label><label>Unavailable until<input name="unavailableUntil" type="datetime-local" required></label><label>Reason<input name="reason" value="Teacher unavailable period" required></label><button class="admin-button secondary">Add unavailable dates</button></form>`}
+    </section>
+    <div class="journey-two-column">
+      <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">WEEK SUPPORT</p><h2>Notes and recovery</h2></div></div>
+        <form id="journey-support-form" class="stack-form"><label>Extension until<input name="extensionUntil" type="date" value="${escapeHtml(data.progress?.extension_until || "")}" ${disabled}></label>
+          <label>Recovery mission<textarea name="recoveryMission" ${disabled}>${escapeHtml(data.progress?.recovery_mission || "")}</textarea></label><label>Private notes<textarea name="privateNotes" ${disabled}>${escapeHtml(data.progress?.teacher_private_notes || "")}</textarea></label>
+          <label>Student-visible feedback<textarea name="studentFeedback" ${disabled}>${escapeHtml(data.progress?.student_visible_feedback || "")}</textarea></label><label>Reason<input name="reason" value="Weekly support plan updated" ${disabled}></label>
+          ${readOnly ? "" : '<button class="admin-button secondary">Save support plan</button>'}</form>
+      </section>
+      <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">WEEK DECISION</p><h2>Teacher approval</h2></div></div>
+        <form id="journey-decision-form" class="stack-form"><label>Skills achieved<textarea name="skillsAchieved" ${disabled}></textarea></label><label>Skills developing<textarea name="skillsDeveloping" ${disabled}></textarea></label>
+          <label>Next focus / student feedback<textarea name="nextFocus" ${disabled}></textarea></label><label>Private notes<textarea name="privateNotes" ${disabled}></textarea></label><label>Decision reason<input name="reason" ${disabled}></label>
+          ${readOnly ? "" : '<div class="journey-decision-actions"><button class="admin-button primary" data-week-action="approve" type="button">Approve and unlock next week</button><button class="admin-button secondary" data-week-action="request_revision" type="button">Request another attempt</button><button class="admin-button secondary" data-week-action="keep_in_progress" type="button">Keep in progress</button></div>'}
+        </form>
+      </section>
+    </div>
+    ${journeyCanAdmin() ? `<section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">PROGRAM CONTROLS</p><h2>Dates, pause and readiness override</h2></div></div>
+      <div class="journey-three-column"><form id="journey-program-form" class="stack-form"><label>Start date<input name="programStartDate" type="date" value="${escapeHtml(data.program?.program_start_date || "")}"></label><label>Duration days<input name="durationDays" type="number" min="1" max="730" value="${data.program?.duration_days || 45}"></label><label>Target date<input name="targetPerformanceDate" type="date" value="${escapeHtml(data.program?.target_performance_date || "")}"></label><label>Confirmed show date<input name="confirmedPerformanceDate" type="date" value="${escapeHtml(data.program?.confirmed_performance_date || "")}"></label><label>Reason<input name="reason" value="Program date reviewed by admin"></label><button class="admin-button secondary">Save program dates</button></form>
+      <form id="journey-pause-form" class="stack-form"><label>Action date<input name="actionDate" type="date" required></label><label>Reason<input name="reason" value="Approved course schedule change"></label><button class="admin-button secondary" data-program-action="${data.program?.program_status === "paused" ? "resume" : "pause"}" type="button">${data.program?.program_status === "paused" ? "Resume course" : "Pause course"}</button></form>
+      <form id="journey-override-form" class="stack-form"><label>Manual readiness value<input name="newValue" type="number" min="0" max="100" value="${Math.round(data.readiness?.readiness || 0)}"></label><label>Written reason<input name="reason" value="Readiness verified through an in-person assessment"></label><button class="admin-button secondary">Save authorized override</button></form></div></section>` : ""}
+    <section class="journey-subpanel"><div class="panel-heading"><div><p class="eyebrow">AUDIT HISTORY</p><h2>Who changed what and why</h2></div></div><div class="journey-audit-list">${combinedAudit.map((entry) => `<article><span>${formatDateTime(entry.created_at)}</span><strong>${escapeHtml(String(entry.label || "change").replaceAll("_", " "))}</strong><small>${escapeHtml(entry.actor_name || entry.actor_role)} / ${escapeHtml(entry.detail || "No reason recorded")}</small></article>`).join("") || '<div class="empty-state">No journey audit records yet.</div>'}</div></section>
+  `;
+}
+
+async function refreshJourneyWorkspace(message = "Journey workspace updated.") {
+  await loadJourneyControl(activeJourneyStudentId);
+  showToast(message);
+}
+
+async function submitWorkspaceForm(form) {
+  const studentId = activeJourneyStudentId;
+  const week = activeJourneyWeek;
+  if (form.matches(".live-attendance-form")) {
+    const values = new FormData(form);
+    await api(`/api/sessions/${form.dataset.sessionId}/attendance`, { method: "PATCH", body: JSON.stringify(Object.fromEntries(values)) });
+  } else if (form.matches(".practice-attendance-form")) {
+    const values = Object.fromEntries(new FormData(form));
+    values.weekNumber = week;
+    await api(`/api/students/${studentId}/practice-attendance/${form.dataset.date}`, { method: "PATCH", body: JSON.stringify(values) });
+  } else if (form.id === "journey-new-practice-attendance") {
+    const values = Object.fromEntries(new FormData(form));
+    await api(`/api/students/${studentId}/practice-attendance/${values.date}`, { method: "PATCH", body: JSON.stringify({ ...values, weekNumber: week }) });
+  } else if (form.matches(".milestone-assessment-form")) {
+    await api(`/api/students/${studentId}/milestones/${form.dataset.milestoneId}/assessment`, { method: "PATCH", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+  } else if (form.id === "journey-support-form") {
+    await api(`/api/students/${studentId}/weeks/${week}/support`, { method: "PATCH", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+  } else if (form.id === "journey-recurring-form") {
+    const values = Object.fromEntries(new FormData(form));
+    const slots = [...form.querySelectorAll("[data-recurring-slot]")].map((card) => ({
+      teacherId: Number(card.querySelector('[name="teacherId"]').value), weekday: Number(card.querySelector('[name="weekday"]').value),
+      startTime: card.querySelector('[name="startTime"]').value, durationMinutes: Number(card.querySelector('[name="durationMinutes"]').value), meetingLink: card.querySelector('[name="meetingLink"]').value
+    }));
+    await api(`/api/students/${studentId}/recurring-sessions`, { method: "PATCH", body: JSON.stringify({ sessionSlots: slots, effectiveFrom: values.effectiveFrom, reason: values.reason }) });
+  } else if (form.id === "journey-unavailable-form") {
+    const values = Object.fromEntries(new FormData(form));
+    values.unavailableFrom = new Date(values.unavailableFrom).toISOString();
+    values.unavailableUntil = new Date(values.unavailableUntil).toISOString();
+    await api(`/api/teachers/${values.teacherId}/unavailable-periods`, { method: "POST", body: JSON.stringify(values) });
+  } else if (form.id === "journey-program-form") {
+    const values = Object.fromEntries(new FormData(form));
+    values.durationDays = Number(values.durationDays); values.customDuration = ![45, 60, 90].includes(values.durationDays);
+    await api(`/api/students/${studentId}/performance-program`, { method: "PATCH", body: JSON.stringify(values) });
+  } else if (form.id === "journey-override-form") {
+    const values = Object.fromEntries(new FormData(form)); values.newValue = Number(values.newValue);
+    await api(`/api/students/${studentId}/readiness-override`, { method: "POST", body: JSON.stringify(values) });
+  }
+  await refreshJourneyWorkspace();
+}
+
+async function submitWeekDecision(action) {
+  const values = Object.fromEntries(new FormData(document.querySelector("#journey-decision-form")));
+  const body = { action, ...values, studentFeedback: values.nextFocus };
+  await api(`/api/students/${activeJourneyStudentId}/weeks/${activeJourneyWeek}/decision`, { method: "POST", body: JSON.stringify(body) });
+  await refreshJourneyWorkspace(action === "approve" ? `Great work! Week ${activeJourneyWeek + 1} is now unlocked.` : "Week decision saved.");
 }
 
 function bindEvents() {
@@ -1185,6 +1593,12 @@ function bindEvents() {
     await loadDashboard();
     showToast("Dashboard refreshed.");
   });
+  document.querySelector("#refresh-activity")?.addEventListener("click", async () => {
+    await loadActivityLog();
+    showToast("Activity log refreshed.");
+  });
+  document.querySelector("#activity-type-filter")?.addEventListener("change", renderActivityLog);
+  document.querySelector("#activity-search")?.addEventListener("input", renderActivityLog);
   document.querySelector("#apply-student-filters").addEventListener("click", loadStudents);
   document.querySelector("#student-search").addEventListener("keydown", (event) => {
     if (event.key === "Enter") loadStudents();
@@ -1212,6 +1626,18 @@ function bindEvents() {
   document.querySelector("#change-password-form").addEventListener("submit", changePassword);
   document.querySelector("#reset-password-form").addEventListener("submit", resetStaffPassword);
   document.querySelector("#review-form").addEventListener("submit", submitReview);
+  document.querySelector("#refresh-journey")?.addEventListener("click", () => loadJourneyControl(activeJourneyStudentId));
+  document.querySelector("#journey-student-select")?.addEventListener("change", (event) => openJourneyStudent(Number(event.target.value)));
+  document.querySelector("#journey-confirmation-form")?.addEventListener("submit", submitJourneyConfirmation);
+  document.querySelector("#journey-duration")?.addEventListener("change", (event) => {
+    document.querySelector("#journey-custom-duration-label").hidden = event.target.value !== "custom";
+    updateConfirmationTargetDate();
+  });
+  document.querySelector("#journey-start-date")?.addEventListener("change", updateConfirmationTargetDate);
+  document.querySelector("#journey-custom-duration")?.addEventListener("input", updateConfirmationTargetDate);
+  document.querySelector("#journey-course-state")?.addEventListener("change", (event) => {
+    document.querySelector("#journey-pause-reason-label").hidden = event.target.value !== "paused";
+  });
 
   document.querySelectorAll("[data-rating]").forEach((input) => {
     input.addEventListener("input", () => {
@@ -1230,6 +1656,13 @@ function bindEvents() {
   document.addEventListener("change", (event) => {
     const teacherSelect = event.target.closest(".teacher-assignment-select");
     if (teacherSelect) limitTeacherSelection(teacherSelect);
+  });
+
+  document.addEventListener("submit", async (event) => {
+    const form = event.target.closest("#journey-workspace-content form");
+    if (!form || form.id === "journey-decision-form" || form.id === "journey-pause-form") return;
+    event.preventDefault();
+    try { await submitWorkspaceForm(form); } catch (error) { showToast(error.message); }
   });
 
   document.addEventListener("click", async (event) => {
@@ -1265,6 +1698,66 @@ function bindEvents() {
       const session = adminSessions.find((item) => Number(item.id) === Number(sessionButton.dataset.sessionId));
       if (session) await openSessionEditor(session);
     }
+
+    const journeyQueueButton = event.target.closest(".open-journey-workspace");
+    if (journeyQueueButton) await openJourneyStudent(Number(journeyQueueButton.dataset.studentId), Number(journeyQueueButton.dataset.week));
+
+    const excuseButton = event.target.closest(".excuse-journey-requirement");
+    if (excuseButton) {
+      const reason = window.prompt("Why is this requirement being excused?");
+      if (reason) {
+        try {
+          await api(`/api/students/${activeJourneyStudentId}/weeks/${activeJourneyWeek}/requirements/${excuseButton.dataset.id}/excuse`, {
+            method: "POST", body: JSON.stringify({ reason })
+          });
+          await refreshJourneyWorkspace("Requirement excused with an audit record.");
+        } catch (error) { showToast(error.message); }
+      }
+    }
+
+    const weekAction = event.target.closest("[data-week-action]");
+    if (weekAction) {
+      try { await submitWeekDecision(weekAction.dataset.weekAction); } catch (error) { showToast(error.message); }
+    }
+
+    const programAction = event.target.closest("[data-program-action]");
+    if (programAction) {
+      const form = document.querySelector("#journey-pause-form");
+      const values = Object.fromEntries(new FormData(form));
+      const action = programAction.dataset.programAction;
+      try {
+        await api(`/api/students/${activeJourneyStudentId}/performance-program/${action}`, {
+          method: "POST",
+          body: JSON.stringify(action === "pause"
+            ? { pauseDate: values.actionDate, reason: values.reason }
+            : { resumeDate: values.actionDate, reason: values.reason })
+        });
+        await refreshJourneyWorkspace(action === "pause" ? "Course paused." : "Course resumed and target date extended.");
+      } catch (error) { showToast(error.message); }
+    }
+
+    const sessionAction = event.target.closest(".journey-session-action");
+    if (sessionAction) {
+      const action = sessionAction.dataset.sessionAction;
+      const reason = window.prompt(`Reason for ${action.replaceAll("_", " ")}:`);
+      if (!reason) return;
+      try {
+        if (action === "cancel") {
+          await api(`/api/sessions/${sessionAction.dataset.sessionId}/cancel`, {
+            method: "POST", body: JSON.stringify({ reason })
+          });
+        } else {
+          const value = window.prompt("New date and time (example: 2026-08-04T17:00):");
+          if (!value) return;
+          const scheduledAt = new Date(value).toISOString();
+          await api(`/api/sessions/${sessionAction.dataset.sessionId}/${action}`, {
+            method: "POST",
+            body: JSON.stringify({ scheduledAt, durationMinutes: Number(sessionAction.dataset.duration || 45), reason })
+          });
+        }
+        await refreshJourneyWorkspace(action === "cancel" ? "Session cancelled." : "Session schedule updated.");
+      } catch (error) { showToast(error.message); }
+    }
   });
 }
 
@@ -1276,7 +1769,11 @@ function renderAdminUser() {
   avatar.innerHTML = `<img src="${assetUrl("brand-logo-transparent.png")}" alt="On The Streets">`;
   avatar.title = `${initials(adminUser.name)} - go to Dashboard`;
   avatar.classList.add("has-logo");
-  document.querySelector("#open-create-student").hidden = adminUser.role === "teacher";
+  document.querySelector("#open-create-student").hidden = ["teacher", "operations"].includes(adminUser.role);
+  document.querySelector("#open-create-session").hidden = adminUser.role === "operations";
+  document.querySelector('[data-admin-view="reviews"]').hidden = adminUser.role === "operations";
+  document.querySelectorAll("#course-plan-form input, #course-plan-form textarea, #course-plan-form select, #course-plan-form button")
+    .forEach((field) => { field.disabled = adminUser.role === "operations"; });
   document.querySelector("#staff-nav-item").hidden = adminUser.role !== "super_admin";
   document.querySelector(".admin-brand small").textContent = adminUser.role === "teacher"
     ? "Teacher workspace"

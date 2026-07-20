@@ -1,9 +1,11 @@
-const CACHE_NAME = "music-school-ots-v38-logo-only";
+const CACHE_NAME = "the-ots-music-school-v39-mobile-audit";
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./guitar-companion.css",
+  "./guitar-companion.js",
   "./manifest.webmanifest",
   "./favicon-16x16.png",
   "./favicon-32x32.png",

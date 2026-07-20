@@ -1,0 +1,107 @@
+.guitar-companion {
+  position: fixed;
+  right: 22px;
+  bottom: 24px;
+  z-index: 12000;
+  display: grid;
+  width: 76px;
+  height: 82px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.guitar-companion.is-dragging { cursor: grabbing; }
+
+.guitar-companion-stage {
+  position: relative;
+  display: block;
+  width: 68px;
+  height: 68px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(255, 122, 69, 0.98), rgba(236, 107, 167, 0.96) 54%, rgba(112, 87, 255, 0.98));
+  box-shadow: 0 16px 34px rgba(7, 5, 18, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.guitar-companion-player,
+.guitar-companion-guitar,
+.guitar-companion-note {
+  position: absolute;
+  pointer-events: none;
+}
+
+.guitar-companion-player { left: 7px; bottom: 8px; font-size: 2.1rem; }
+.guitar-companion-guitar { right: 4px; bottom: 5px; font-size: 2rem; transform: rotate(-18deg); transform-origin: 60% 70%; }
+.guitar-companion-note { opacity: 0; color: #fff3a8; font-size: 1.1rem; font-weight: 900; }
+.guitar-companion-note.note-one { top: 2px; right: 10px; }
+.guitar-companion-note.note-two { top: 12px; left: 5px; }
+
+.guitar-companion-message {
+  position: absolute;
+  right: 2px;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: min(230px, calc(100vw - 30px));
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px 14px 4px 14px;
+  background: rgba(20, 16, 34, 0.96);
+  box-shadow: 0 12px 28px rgba(5, 4, 14, 0.32);
+  color: #fff;
+  font: 800 0.74rem/1.35 system-ui, sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.96);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.guitar-companion:hover .guitar-companion-message,
+.guitar-companion:focus-visible .guitar-companion-message,
+.guitar-companion.is-playing .guitar-companion-message {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.guitar-companion.is-playing .guitar-companion-guitar { animation: ots-guitar-strum 420ms ease-in-out 6; }
+.guitar-companion.is-playing .guitar-companion-player { animation: ots-player-groove 620ms ease-in-out 4; }
+.guitar-companion.is-playing .guitar-companion-note { animation: ots-music-note 1.2s ease-out 2; }
+.guitar-companion.is-playing .note-two { animation-delay: 240ms; }
+
+@keyframes ots-guitar-strum {
+  0%, 100% { transform: rotate(-18deg) scale(1); }
+  50% { transform: rotate(-5deg) scale(1.08); }
+}
+
+@keyframes ots-player-groove {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-4px) rotate(4deg); }
+}
+
+@keyframes ots-music-note {
+  0% { opacity: 0; transform: translateY(8px) scale(0.7); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-18px) translateX(8px) scale(1.15); }
+}
+
+@media (max-width: 780px) {
+  .guitar-companion {
+    right: 12px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    width: 64px;
+    height: 68px;
+  }
+  .guitar-companion-stage { width: 58px; height: 58px; border-radius: 20px; }
+  .guitar-companion-player { font-size: 1.75rem; }
+  .guitar-companion-guitar { font-size: 1.65rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guitar-companion * { animation: none !important; transition: none !important; }
+}

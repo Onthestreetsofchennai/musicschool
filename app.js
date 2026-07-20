@@ -1,7 +1,7 @@
 const STORAGE_KEY = "musicSchoolOTSStateV1";
 const STUDENT_TOKEN_KEY = "otsStudentToken";
 const WELCOME_SEEN_PREFIX = "otsWelcomeSeen:";
-const WORKER_API_ORIGIN = "https://music-school-ots.sharoncornerstone56.workers.dev";
+const WORKER_API_ORIGIN = window.OTS_API_ORIGIN || "https://music-school-ots.sharoncornerstone56.workers.dev";
 const GOOGLE_MEET_CREATE_URL = "https://meet.google.com/new";
 const GOOGLE_MEET_NICKNAME_PREFIX = "ots-music-school-student";
 const API_ORIGIN = (() => {
@@ -371,7 +371,7 @@ function showAuthError(message) {
 function showAdmissionInvite(email = "") {
   const card = document.querySelector("#student-admission-card");
   const applyLink = document.querySelector("#student-apply-whatsapp");
-  const message = `Hi MUSIC SCHOOL OTS, I wanna apply for the music course. My email is ${email || "not added yet"}.`;
+  const message = `Hi THE OTS MUSIC SCHOOL, I want to apply for the music course. My email is ${email || "not added yet"}.`;
   applyLink.href = `https://wa.me/919841610111?text=${encodeURIComponent(message)}`;
   card.hidden = false;
   document.querySelector("#student-auth-error").hidden = true;
@@ -666,7 +666,7 @@ function navigate(viewName, bypassGate = false) {
   });
 
   const activeView = document.querySelector(`#view-${viewName}`);
-  document.querySelector("#topbar-title").textContent = activeView?.dataset.title || "MUSIC SCHOOL OTS";
+  document.querySelector("#topbar-title").textContent = activeView?.dataset.title || "THE OTS MUSIC SCHOOL";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 

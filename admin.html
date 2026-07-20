@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111426">
-  <title>OTS Admin | Student Analysis</title>
+  <title>THE OTS MUSIC SCHOOL | Admin</title>
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png?v=37">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=37">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=37">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=37">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/guitar-companion.css">
 </head>
 <body>
   <div class="admin-login" id="admin-login">
@@ -20,7 +21,7 @@
           <span class="brand-mark"><img src="brand-logo-transparent.png" alt="On The Streets"></span>
         </button>
         <span>
-          <strong>MUSIC SCHOOL</strong>
+          <strong>THE OTS MUSIC SCHOOL</strong>
           <small>Academic operations</small>
         </span>
       </div>
@@ -53,7 +54,7 @@
       <div class="admin-brand">
         <span class="brand-mark"><img src="brand-logo-transparent.png" alt="On The Streets"></span>
         <span>
-          <strong>MUSIC SCHOOL</strong>
+          <strong>THE OTS MUSIC SCHOOL</strong>
           <small>Academic operations</small>
         </span>
       </div>
@@ -75,6 +76,11 @@
           <span class="nav-symbol">C</span>
           Course plans
         </button>
+        <button class="admin-nav-item" data-admin-view="journey">
+          <span class="nav-symbol">J</span>
+          Journey control
+          <span class="nav-count" id="nav-journey-count">0</span>
+        </button>
         <button class="admin-nav-item" data-admin-view="staff" id="staff-nav-item" hidden>
           <span class="nav-symbol">+</span>
           Staff
@@ -83,6 +89,10 @@
           <span class="nav-symbol">R</span>
           Review queue
           <span class="nav-count" id="nav-review-count">0</span>
+        </button>
+        <button class="admin-nav-item" data-admin-view="activity">
+          <span class="nav-symbol">T</span>
+          Activity log
         </button>
         <button class="admin-nav-item" data-admin-view="alerts">
           <span class="nav-symbol">!</span>
@@ -112,7 +122,7 @@
         </div>
         <div class="admin-user">
           <div>
-            <strong id="admin-user-name">OTS Admin</strong>
+            <strong id="admin-user-name">THE OTS MUSIC SCHOOL Admin</strong>
             <small id="admin-user-role">Super admin</small>
           </div>
           <button class="admin-avatar" id="admin-avatar" type="button" aria-label="Go to Dashboard">OA</button>
@@ -408,6 +418,77 @@
           </section>
         </section>
 
+        <section class="admin-view" id="admin-view-journey" data-title="Journey control">
+          <div class="admin-page-intro compact journey-hero">
+            <div>
+              <p class="eyebrow">TEACHER-APPROVED JOURNEY</p>
+              <h1>Control the path to each student's first show.</h1>
+              <p>Confirm existing records, manage three individual weekly sessions, assess readiness and approve each week.</p>
+            </div>
+            <button class="admin-button secondary" id="refresh-journey" type="button">Refresh journey data</button>
+          </div>
+
+          <div class="metric-grid journey-metrics">
+            <article class="metric-card"><span class="metric-label">Pending confirmation</span><strong id="journey-pending-count">0</strong><small>Existing students requiring admin review</small></article>
+            <article class="metric-card"><span class="metric-label">Waiting approval</span><strong id="journey-waiting-count">0</strong><small>Weeks submitted to teachers</small></article>
+            <article class="metric-card"><span class="metric-label">At risk</span><strong id="journey-risk-count">0</strong><small>Low readiness, revision or overdue</small></article>
+            <article class="metric-card"><span class="metric-label">Overdue review</span><strong id="journey-overdue-count">0</strong><small>Waiting two days or longer</small></article>
+          </div>
+
+          <section class="admin-panel journey-selector-panel">
+            <label>
+              Student journey
+              <select id="journey-student-select"><option value="">Choose a student</option></select>
+            </label>
+            <p id="journey-role-note">Select a student to open their confirmation or teacher workspace.</p>
+          </section>
+
+          <section class="admin-panel" id="journey-confirmation-panel" hidden>
+            <div class="panel-heading">
+              <div><p class="eyebrow">EXISTING STUDENT</p><h2>Admin confirmation</h2></div>
+              <span class="status-pill amber">Pending admin confirmation</span>
+            </div>
+            <form id="journey-confirmation-form" class="journey-form">
+              <div class="journey-form-grid">
+                <label>Assigned primary teacher<select id="journey-primary-teacher" required></select></label>
+                <label>Course template<input id="journey-course-template" required placeholder="Guitar performance plan"></label>
+                <label>Program start date<input id="journey-start-date" type="date" required></label>
+                <label>Duration
+                  <select id="journey-duration" required><option value="45">45 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="custom">Custom</option></select>
+                </label>
+                <label id="journey-custom-duration-label" hidden>Custom days<input id="journey-custom-duration" type="number" min="1" max="730" value="75"></label>
+                <label>Target performance date<input id="journey-target-date" type="date"></label>
+                <label>Current active week<input id="journey-active-week" type="number" min="1" max="52" required></label>
+                <label>Previously completed weeks<input id="journey-completed-weeks" placeholder="Example: 1, 2"></label>
+                <label>Daily practice deadline<input id="journey-practice-deadline" type="time" value="20:00" required></label>
+                <label>Weekly rest day<select id="journey-rest-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></label>
+                <label>Class buffer (minutes)<input id="journey-buffer" type="number" min="0" max="120" value="15"></label>
+                <label>Current course state<select id="journey-course-state"><option value="active">Active</option><option value="paused">Paused</option></select></label>
+              </div>
+              <label>Reason for previously completed weeks<textarea id="journey-history-reason" rows="2" placeholder="Required when completed weeks are entered"></textarea></label>
+              <label id="journey-pause-reason-label" hidden>Current pause reason<textarea id="journey-pause-reason" rows="2"></textarea></label>
+
+              <div class="panel-heading compact-heading"><div><p class="eyebrow">ONE-TO-ONE SCHEDULE</p><h2>Three weekly live sessions</h2></div></div>
+              <div class="journey-slot-grid" id="journey-confirmation-slots"></div>
+
+              <div class="panel-heading compact-heading"><div><p class="eyebrow">EXISTING SKILLS</p><h2>Milestone baseline</h2></div><small>Weights must total 100</small></div>
+              <div class="journey-milestone-grid" id="journey-confirmation-milestones"></div>
+              <label>Confirmation notes<textarea id="journey-confirmation-notes" rows="2" placeholder="What was checked and with whom"></textarea></label>
+              <p class="form-error" id="journey-confirmation-error" hidden></p>
+              <button class="admin-button primary large" type="submit">Confirm and start this journey</button>
+            </form>
+          </section>
+
+          <section class="admin-panel" id="journey-approval-queue-panel">
+            <div class="panel-heading"><div><p class="eyebrow">WEEKLY APPROVAL</p><h2>Teacher action queue</h2></div></div>
+            <div class="journey-approval-list" id="journey-approval-list"><div class="empty-state">No journey data loaded.</div></div>
+          </section>
+
+          <section class="admin-panel journey-workspace" id="journey-workspace-panel" hidden>
+            <div id="journey-workspace-content"></div>
+          </section>
+        </section>
+
         <section class="admin-view" id="admin-view-reviews" data-title="Teacher review queue">
           <div class="admin-page-intro compact">
             <div>
@@ -483,6 +564,45 @@
 
             <button class="admin-button primary large" type="submit">Submit review and update student score</button>
           </form>
+        </section>
+
+        <section class="admin-view" id="admin-view-activity" data-title="School activity log">
+          <div class="admin-page-intro compact">
+            <div>
+              <p class="eyebrow">ACCOUNTABILITY</p>
+              <h1>See who did what.</h1>
+              <p>Track teacher reviews, milestone assessments, attendance updates, live-session changes and course approvals.</p>
+            </div>
+            <button class="admin-button secondary" id="refresh-activity" type="button">Refresh log</button>
+          </div>
+
+          <div class="metric-grid activity-metric-grid">
+            <article class="metric-card"><span class="metric-label">Recent actions</span><strong id="activity-total">0</strong><small>Latest recorded operations</small></article>
+            <article class="metric-card"><span class="metric-label">Video reviews</span><strong id="activity-reviews">0</strong><small>Teacher review records</small></article>
+            <article class="metric-card"><span class="metric-label">Teachers active</span><strong id="activity-teachers">0</strong><small>Named in this log</small></article>
+            <article class="metric-card"><span class="metric-label">Students touched</span><strong id="activity-students">0</strong><small>Across recent actions</small></article>
+          </div>
+
+          <section class="admin-panel activity-panel">
+            <div class="activity-toolbar">
+              <label>Activity type
+                <select id="activity-type-filter">
+                  <option value="all">All activity</option>
+                  <option value="practice_review">Practice reviews</option>
+                  <option value="journey">Course journey</option>
+                  <option value="milestone">Milestones</option>
+                  <option value="attendance">Attendance</option>
+                  <option value="live_session">Live sessions</option>
+                </select>
+              </label>
+              <label>Search teacher or student
+                <input id="activity-search" type="search" placeholder="Type a name or action">
+              </label>
+            </div>
+            <div class="activity-log-list" id="activity-log-list">
+              <div class="empty-state">Open Activity log to load recent records.</div>
+            </div>
+          </section>
         </section>
 
         <section class="admin-view" id="admin-view-alerts" data-title="Student alerts">
@@ -694,6 +814,7 @@
   </dialog>
 
   <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
+  <script src="/guitar-companion.js"></script>
   <script src="/admin.js"></script>
 </body>
 </html>
