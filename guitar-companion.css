@@ -4,8 +4,8 @@
   bottom: 24px;
   z-index: 12000;
   display: grid;
-  width: 142px;
-  height: 112px;
+  width: 126px;
+  height: 158px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -38,12 +38,11 @@
 
 .guitar-motion-emote-shell {
   position: relative;
-  width: min(900px, calc(100vw - 36px));
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
-  background: #100d1f;
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.56);
+  width: min(360px, calc(100vw - 36px));
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   opacity: 0;
   transform: translateY(70px) scale(0.48);
   transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease;
@@ -54,20 +53,20 @@
   transform: translateY(0) scale(1);
 }
 
-.guitar-motion-emote-video {
+.guitar-motion-emote-animation {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  border: 0;
-  background: #100d1f;
-  object-fit: cover;
+  height: auto;
+  max-height: 72vh;
+  object-fit: contain;
+  filter: drop-shadow(0 26px 28px rgba(0, 0, 0, 0.55));
 }
 
 .guitar-motion-emote-message {
   position: absolute;
-  right: 18px;
-  bottom: 18px;
-  left: 18px;
+  right: 0;
+  bottom: -4px;
+  left: 0;
   margin: 0;
   padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -81,8 +80,8 @@
 
 .guitar-motion-emote-close {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 4px;
+  right: 4px;
   z-index: 2;
   padding: 8px 13px;
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -108,8 +107,8 @@
 .guitar-companion-stage {
   position: relative;
   display: block;
-  width: 136px;
-  height: 106px;
+  width: 118px;
+  height: 154px;
   background: transparent;
 }
 
@@ -127,7 +126,6 @@
   object-fit: contain;
   filter: drop-shadow(0 12px 14px rgba(4, 3, 16, 0.5));
   transform-origin: 50% 80%;
-  animation: ots-duo-idle 3.2s ease-in-out infinite;
 }
 
 .guitar-companion-note { opacity: 0; color: #fff3a8; font-size: 1.1rem; font-weight: 900; }
@@ -188,26 +186,6 @@
   font-size: 0.92rem;
   text-align: center;
   translate: 50% 0;
-}
-
-.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="victory-jump"] .guitar-companion-duo {
-  animation: ots-emote-victory-jump 720ms cubic-bezier(0.2, 0.75, 0.3, 1) 5;
-}
-
-.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="guitar-solo"] .guitar-companion-duo {
-  animation: ots-emote-guitar-solo 600ms ease-in-out 6;
-}
-
-.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="riff-dance"] .guitar-companion-duo {
-  animation: ots-emote-riff-dance 750ms ease-in-out 5;
-}
-
-.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="power-spin"] .guitar-companion-duo {
-  animation: ots-emote-power-spin 1.05s cubic-bezier(0.35, 0.05, 0.2, 1) 3;
-}
-
-.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="stage-bow"] .guitar-companion-duo {
-  animation: ots-emote-stage-bow 900ms ease-in-out 4;
 }
 
 .guitar-companion:is(.is-playing, .is-celebrating) .guitar-companion-note {
@@ -278,8 +256,7 @@
 @media (max-width: 780px) {
   .guitar-motion-emote { padding: 10px; }
   .guitar-motion-emote-shell {
-    width: calc(100vw - 20px);
-    border-radius: 18px;
+    width: min(300px, calc(100vw - 20px));
   }
   .guitar-motion-emote-message {
     right: 10px;
@@ -291,10 +268,10 @@
   .guitar-companion {
     right: 12px;
     bottom: calc(82px + env(safe-area-inset-bottom));
-    width: 112px;
-    height: 92px;
+    width: 94px;
+    height: 124px;
   }
-  .guitar-companion-stage { width: 106px; height: 86px; }
+  .guitar-companion-stage { width: 90px; height: 120px; }
   .guitar-companion-message { max-width: min(210px, calc(100vw - 24px)); }
   .guitar-companion.is-celebrating {
     top: 48% !important;

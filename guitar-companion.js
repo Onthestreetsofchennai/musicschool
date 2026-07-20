@@ -1,12 +1,8 @@
 (() => {
   const STORAGE_KEY = `otsGuitarCompanion:${location.pathname.includes("/admin") ? "admin" : "student"}`;
   const EMOTE_STORAGE_KEY = `${STORAGE_KEY}:emoteIndex`;
-  const ASSET_URL = new URL(
-    "guitar-duo-mascot.png",
-    document.currentScript?.src || location.href
-  ).href;
-  const MOTION_URL = new URL(
-    "guitar-emote-spin-twirl.mp4",
+  const ANIMATED_EMOTE_URL = new URL(
+    "guitar-duo-emote-animated.png",
     document.currentScript?.src || location.href
   ).href;
   const messages = [
@@ -38,7 +34,7 @@
     companion.innerHTML = `
       <span class="guitar-companion-message" aria-live="polite">Ready for your next riff?</span>
       <span class="guitar-companion-stage" aria-hidden="true">
-        <img class="guitar-companion-duo" src="${ASSET_URL}" alt="" draggable="false">
+        <img class="guitar-companion-duo" src="${ANIMATED_EMOTE_URL}" alt="" draggable="false">
         <span class="guitar-companion-note note-one">&#9834;</span>
         <span class="guitar-companion-note note-two">&#9835;</span>
         <span class="guitar-companion-spark spark-one">&#10022;</span>
@@ -56,9 +52,7 @@
     motionOverlay.innerHTML = `
       <div class="guitar-motion-emote-shell" role="dialog" aria-modal="true" aria-labelledby="guitar-motion-emote-message">
         <button class="guitar-motion-emote-close" type="button" aria-label="Skip celebration">Skip</button>
-        <video class="guitar-motion-emote-video" muted playsinline preload="auto" poster="${ASSET_URL}">
-          <source src="${MOTION_URL}" type="video/mp4">
-        </video>
+        <img class="guitar-motion-emote-animation" src="${ANIMATED_EMOTE_URL}" alt="Animated boy and girl celebrating with guitars">
         <p class="guitar-motion-emote-message" id="guitar-motion-emote-message" aria-live="assertive">Daily mission complete!</p>
       </div>
     `;
@@ -107,18 +101,15 @@
     const closeMotionEmote = () => {
       window.clearTimeout(motionTimer);
       motionOverlay.classList.remove("is-visible");
-      const video = motionOverlay.querySelector(".guitar-motion-emote-video");
-      video.pause();
       window.clearTimeout(motionHideTimer);
       motionHideTimer = window.setTimeout(() => {
         motionOverlay.hidden = true;
-        video.currentTime = 0;
       }, 260);
     };
 
     const playMotionEmote = (detail = {}) => {
       const selected = selectEmote(detail.emote || "");
-      const video = motionOverlay.querySelector(".guitar-motion-emote-video");
+      const animation = motionOverlay.querySelector(".guitar-motion-emote-animation");
       const messageElement = motionOverlay.querySelector(".guitar-motion-emote-message");
       window.clearTimeout(motionTimer);
       window.clearTimeout(motionHideTimer);
@@ -129,15 +120,9 @@
       motionOverlay.classList.remove("is-visible");
       void motionOverlay.offsetWidth;
       motionOverlay.classList.add("is-visible");
-      video.currentTime = 0;
-      const playback = video.play();
-      if (playback?.catch) {
-        playback.catch(() => {
-          closeMotionEmote();
-          runEmote({ ...detail, celebrate: true });
-        });
-      }
-      motionTimer = window.setTimeout(closeMotionEmote, 6500);
+      animation.removeAttribute("src");
+      window.requestAnimationFrame(() => animation.setAttribute("src", ANIMATED_EMOTE_URL));
+      motionTimer = window.setTimeout(closeMotionEmote, 5200);
     };
 
     const celebrate = (detail = {}) => {
@@ -151,7 +136,6 @@
       emotes: emotes.map(({ id, label }) => ({ id, label }))
     });
     window.addEventListener("ots:task-completed", (event) => celebrate(event.detail || {}));
-    motionOverlay.querySelector(".guitar-motion-emote-video").addEventListener("ended", closeMotionEmote);
     motionOverlay.querySelector(".guitar-motion-emote-close").addEventListener("click", closeMotionEmote);
     motionOverlay.addEventListener("click", (event) => {
       if (event.target === motionOverlay) closeMotionEmote();
