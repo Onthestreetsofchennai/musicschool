@@ -4,8 +4,8 @@
   bottom: 24px;
   z-index: 12000;
   display: grid;
-  width: 76px;
-  height: 82px;
+  width: 142px;
+  height: 112px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -19,29 +19,59 @@
 
 .guitar-companion.is-dragging { cursor: grabbing; }
 
+.guitar-companion.is-celebrating {
+  left: 50% !important;
+  top: 52% !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 270px;
+  height: 238px;
+  cursor: default;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
 .guitar-companion-stage {
   position: relative;
   display: block;
-  width: 68px;
-  height: 68px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
-  background: linear-gradient(145deg, rgba(255, 122, 69, 0.98), rgba(236, 107, 167, 0.96) 54%, rgba(112, 87, 255, 0.98));
-  box-shadow: 0 16px 34px rgba(7, 5, 18, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  width: 136px;
+  height: 106px;
+  background: transparent;
 }
 
-.guitar-companion-player,
-.guitar-companion-guitar,
-.guitar-companion-note {
+.guitar-companion-duo,
+.guitar-companion-note,
+.guitar-companion-spark {
   position: absolute;
   pointer-events: none;
 }
 
-.guitar-companion-player { left: 7px; bottom: 8px; font-size: 2.1rem; }
-.guitar-companion-guitar { right: 4px; bottom: 5px; font-size: 2rem; transform: rotate(-18deg); transform-origin: 60% 70%; }
+.guitar-companion-duo {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 14px rgba(4, 3, 16, 0.5));
+  transform-origin: 50% 80%;
+  animation: ots-duo-idle 3.2s ease-in-out infinite;
+}
+
 .guitar-companion-note { opacity: 0; color: #fff3a8; font-size: 1.1rem; font-weight: 900; }
-.guitar-companion-note.note-one { top: 2px; right: 10px; }
-.guitar-companion-note.note-two { top: 12px; left: 5px; }
+.guitar-companion-note.note-one { top: 4px; right: 14px; }
+.guitar-companion-note.note-two { top: 20px; left: 10px; }
+
+.guitar-companion-spark {
+  color: #ffd166;
+  font-size: 1rem;
+  font-weight: 900;
+  opacity: 0;
+  text-shadow: 0 0 12px rgba(255, 209, 102, 0.9);
+}
+
+.spark-one { top: 8%; left: 10%; }
+.spark-two { top: 2%; right: 12%; }
+.spark-three { bottom: 17%; left: 3%; }
+.spark-four { right: 2%; bottom: 22%; }
 
 .guitar-companion-message {
   position: absolute;
@@ -64,24 +94,99 @@
 
 .guitar-companion:hover .guitar-companion-message,
 .guitar-companion:focus-visible .guitar-companion-message,
-.guitar-companion.is-playing .guitar-companion-message {
+.guitar-companion.is-playing .guitar-companion-message,
+.guitar-companion.is-celebrating .guitar-companion-message {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
 
-.guitar-companion.is-playing .guitar-companion-guitar { animation: ots-guitar-strum 420ms ease-in-out 6; }
-.guitar-companion.is-playing .guitar-companion-player { animation: ots-player-groove 620ms ease-in-out 4; }
-.guitar-companion.is-playing .guitar-companion-note { animation: ots-music-note 1.2s ease-out 2; }
-.guitar-companion.is-playing .note-two { animation-delay: 240ms; }
-
-@keyframes ots-guitar-strum {
-  0%, 100% { transform: rotate(-18deg) scale(1); }
-  50% { transform: rotate(-5deg) scale(1.08); }
+.guitar-companion.is-celebrating .guitar-companion-stage {
+  width: 260px;
+  height: 220px;
 }
 
-@keyframes ots-player-groove {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(-4px) rotate(4deg); }
+.guitar-companion.is-celebrating .guitar-companion-message {
+  right: 50%;
+  bottom: calc(100% + 4px);
+  max-width: min(330px, calc(100vw - 28px));
+  padding: 12px 17px;
+  border-radius: 16px;
+  font-size: 0.92rem;
+  text-align: center;
+  translate: 50% 0;
+}
+
+.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="victory-jump"] .guitar-companion-duo {
+  animation: ots-emote-victory-jump 720ms cubic-bezier(0.2, 0.75, 0.3, 1) 5;
+}
+
+.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="guitar-solo"] .guitar-companion-duo {
+  animation: ots-emote-guitar-solo 600ms ease-in-out 6;
+}
+
+.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="riff-dance"] .guitar-companion-duo {
+  animation: ots-emote-riff-dance 750ms ease-in-out 5;
+}
+
+.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="power-spin"] .guitar-companion-duo {
+  animation: ots-emote-power-spin 1.05s cubic-bezier(0.35, 0.05, 0.2, 1) 3;
+}
+
+.guitar-companion:is(.is-playing, .is-celebrating)[data-emote="stage-bow"] .guitar-companion-duo {
+  animation: ots-emote-stage-bow 900ms ease-in-out 4;
+}
+
+.guitar-companion:is(.is-playing, .is-celebrating) .guitar-companion-note {
+  animation: ots-music-note 1.05s ease-out 4;
+}
+
+.guitar-companion:is(.is-playing, .is-celebrating) .note-two { animation-delay: 180ms; }
+
+.guitar-companion.is-celebrating .guitar-companion-spark {
+  animation: ots-celebration-spark 900ms ease-out 4;
+}
+
+.guitar-companion.is-celebrating .spark-two { animation-delay: 120ms; }
+.guitar-companion.is-celebrating .spark-three { animation-delay: 240ms; }
+.guitar-companion.is-celebrating .spark-four { animation-delay: 360ms; }
+
+@keyframes ots-duo-idle {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-5px) rotate(1deg); }
+}
+
+@keyframes ots-emote-victory-jump {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  12% { transform: translateY(5px) scale(1.06, 0.93); }
+  48% { transform: translateY(-34px) rotate(3deg) scale(0.98, 1.04); }
+  72% { transform: translateY(-10px) rotate(-2deg); }
+}
+
+@keyframes ots-emote-guitar-solo {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scale(1); }
+  35% { transform: translateY(-8px) rotate(7deg) scale(1.06); }
+  70% { transform: translateY(1px) rotate(-6deg) scale(1.02); }
+}
+
+@keyframes ots-emote-riff-dance {
+  0%, 100% { transform: translateX(0) translateY(0) rotate(0); }
+  25% { transform: translateX(-22px) translateY(-8px) rotate(-7deg); }
+  50% { transform: translateX(0) translateY(2px) rotate(0); }
+  75% { transform: translateX(22px) translateY(-8px) rotate(7deg); }
+}
+
+@keyframes ots-emote-power-spin {
+  0% { transform: translateY(0) rotate(0) scale(1); }
+  35% { transform: translateY(-24px) rotate(150deg) scale(1.05); }
+  70% { transform: translateY(-10px) rotate(300deg) scale(1.02); }
+  100% { transform: translateY(0) rotate(360deg) scale(1); }
+}
+
+@keyframes ots-emote-stage-bow {
+  0%, 100% { transform: translateY(0) rotate(0) scaleY(1); }
+  30% { transform: translateY(4px) rotate(-1deg) scaleY(0.93); }
+  58% { transform: translateY(15px) rotate(7deg) scaleY(0.82); }
+  78% { transform: translateY(-7px) rotate(-3deg) scaleY(1.03); }
 }
 
 @keyframes ots-music-note {
@@ -90,16 +195,34 @@
   100% { opacity: 0; transform: translateY(-18px) translateX(8px) scale(1.15); }
 }
 
+@keyframes ots-celebration-spark {
+  0% { opacity: 0; transform: scale(0.3) rotate(0); }
+  35% { opacity: 1; transform: scale(1.35) rotate(80deg); }
+  100% { opacity: 0; transform: translateY(-28px) scale(0.55) rotate(180deg); }
+}
+
 @media (max-width: 780px) {
   .guitar-companion {
     right: 12px;
     bottom: calc(82px + env(safe-area-inset-bottom));
-    width: 64px;
-    height: 68px;
+    width: 112px;
+    height: 92px;
   }
-  .guitar-companion-stage { width: 58px; height: 58px; border-radius: 20px; }
-  .guitar-companion-player { font-size: 1.75rem; }
-  .guitar-companion-guitar { font-size: 1.65rem; }
+  .guitar-companion-stage { width: 106px; height: 86px; }
+  .guitar-companion-message { max-width: min(210px, calc(100vw - 24px)); }
+  .guitar-companion.is-celebrating {
+    top: 48% !important;
+    width: 210px;
+    height: 190px;
+  }
+  .guitar-companion.is-celebrating .guitar-companion-stage {
+    width: 202px;
+    height: 176px;
+  }
+  .guitar-companion.is-celebrating .guitar-companion-message {
+    max-width: min(300px, calc(100vw - 24px));
+    font-size: 0.82rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,7 @@
 const STORAGE_KEY = "musicSchoolOTSStateV1";
 const STUDENT_TOKEN_KEY = "otsStudentToken";
 const WELCOME_SEEN_PREFIX = "otsWelcomeSeen:";
-const WORKER_API_ORIGIN = window.OTS_API_ORIGIN || "https://music-school-ots.sharoncornerstone56.workers.dev";
+const WORKER_API_ORIGIN = window.OTS_TEST_API_ORIGIN || "";
 const GOOGLE_MEET_CREATE_URL = "https://meet.google.com/new";
 const GOOGLE_MEET_NICKNAME_PREFIX = "ots-music-school-student";
 const API_ORIGIN = (() => {
@@ -603,6 +603,12 @@ function showToast(message) {
   toast.classList.add("is-visible");
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
+}
+
+function celebrateCompletedTask(message, emote = "") {
+  window.dispatchEvent(new CustomEvent("ots:task-completed", {
+    detail: { message, emote }
+  }));
 }
 
 function welcomeKey(email) {
@@ -1499,6 +1505,7 @@ async function submitUpload(period) {
     await syncStudentFromBackend();
     clearUploadProgress(period);
     showToast(backendWarning || `Daily check-in submitted. Your teacher will review it before ${expectedReviewCopy()}.`);
+    celebrateCompletedTask("Daily mission complete! Your practice streak is growing.");
   } catch (error) {
     setUploadProgress(period, 0, "Upload failed. Please try again.");
     showToast(error.message);
@@ -1603,6 +1610,7 @@ async function completeWeek(weekNumber) {
     }
   }
   showToast(`Week ${weekNumber} completed. Week ${state.currentWeek} is now active.`);
+  celebrateCompletedTask(`Great work! Week ${state.currentWeek} is now unlocked.`, "victory-jump");
 }
 
 async function requestStudentOtp(event) {
