@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-ots-music-school-v43-checkin-history";
+const CACHE_NAME = "the-ots-music-school-v44-checkin-remove";
 const APP_ASSETS = [
   "./",
   "./index.html",

@@ -1540,11 +1540,19 @@ async function submitUpload(period) {
 async function removePendingSubmission(submissionId) {
   if (!submissionId) return;
   try {
-    await apiRequest(`/api/student/me/practice-submissions/${submissionId}`, {
+    const result = await apiRequest(`/api/student/me/practice-submissions/${submissionId}`, {
       method: "DELETE"
     });
+    state.recentSubmissions = state.recentSubmissions.filter((submission) => String(submission.id) !== String(submissionId));
+    Object.values(state.checkins).forEach((checkin) => {
+      if (String(checkin.id) === String(submissionId)) {
+        Object.assign(checkin, { id: null, status: "pending", fileName: "", time: "", durationSeconds: 0, uploadedAt: "" });
+      }
+    });
+    saveState();
+    renderCheckin();
     await syncStudentFromBackend();
-    showToast("Pending practice upload removed.");
+    showToast(result.warning || "Pending practice upload removed.");
   } catch (error) {
     showToast(error.message);
   }
