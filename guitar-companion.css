@@ -167,6 +167,7 @@
 .guitar-companion:hover .guitar-companion-message,
 .guitar-companion:focus-visible .guitar-companion-message,
 .guitar-companion.is-playing .guitar-companion-message,
+.guitar-companion.is-speaking .guitar-companion-message,
 .guitar-companion.is-celebrating .guitar-companion-message {
   opacity: 1;
   transform: translateY(0) scale(1);
@@ -188,11 +189,11 @@
   translate: 50% 0;
 }
 
-.guitar-companion:is(.is-playing, .is-celebrating) .guitar-companion-note {
+.guitar-companion.is-complete:is(.is-playing, .is-celebrating) .guitar-companion-note {
   animation: ots-music-note 1.05s ease-out 4;
 }
 
-.guitar-companion:is(.is-playing, .is-celebrating) .note-two { animation-delay: 180ms; }
+.guitar-companion.is-complete:is(.is-playing, .is-celebrating) .note-two { animation-delay: 180ms; }
 
 .guitar-companion.is-celebrating .guitar-companion-spark {
   animation: ots-celebration-spark 900ms ease-out 4;

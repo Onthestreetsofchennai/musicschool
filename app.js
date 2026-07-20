@@ -1188,6 +1188,9 @@ function renderCheckins() {
 
   document.querySelector("#checkin-streak").textContent = state.streak;
   renderHistory();
+  window.dispatchEvent(new CustomEvent("ots:checkin-state", {
+    detail: { completed: dailySubmitted() }
+  }));
 }
 
 function renderHistory() {
@@ -1550,7 +1553,7 @@ async function removePendingSubmission(submissionId) {
       }
     });
     saveState();
-    renderCheckin();
+    renderCheckins();
     await syncStudentFromBackend();
     showToast(result.warning || "Pending practice upload removed.");
   } catch (error) {
