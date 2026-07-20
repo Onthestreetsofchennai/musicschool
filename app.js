@@ -388,7 +388,7 @@ function formatBackendDate(value) {
   }).format(new Date(value));
 }
 
-async function syncStudentFromBackend() {
+async function syncStudentFromBackend({ keepRecentSubmission = null } = {}) {
   try {
     const data = await apiRequest("/api/student/me");
     backendConnected = true;
@@ -417,7 +417,12 @@ async function syncStudentFromBackend() {
       weeks: data.coursePlan.weeks || courseWeeks
     } : structuredClone(defaultState.coursePlan);
     state.upcomingSessions = data.upcomingSessions || [];
-    state.recentSubmissions = data.recentSubmissions || [];
+    const remoteRecentSubmissions = data.recentSubmissions || [];
+    const keepSubmission = keepRecentSubmission &&
+      !remoteRecentSubmissions.some((submission) => String(submission.id) === String(keepRecentSubmission.id));
+    state.recentSubmissions = keepSubmission
+      ? [keepRecentSubmission, ...remoteRecentSubmissions].slice(0, 14)
+      : remoteRecentSubmissions;
     state.leaderboard = data.leaderboard || [];
     state.checkins = {
       morning: { status: "pending", fileName: "", time: "" },
@@ -1189,7 +1194,7 @@ function renderHistory() {
   const rows = state.recentSubmissions.map((submission) => ({
     id: submission.id,
     day: new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short" }).format(new Date(submission.uploaded_at)),
-    detail: `${submission.period === "morning" ? "Morning" : "Evening"} · ${Math.round(submission.duration_seconds / 60)} min`,
+    detail: `${submission.period === "morning" ? "Morning" : "Evening"} · ${Math.max(1, Math.round(Number(submission.duration_seconds || 0) / 60))} min`,
     status: submission.review_status === "reviewed" ? "Reviewed" : "Waiting review",
     removable: submission.review_status === "pending"
   }));
@@ -1472,6 +1477,7 @@ async function submitUpload(period) {
   if (uploadProgress[period]) return;
   button.disabled = true;
   let backendWarning = "";
+  let createdSubmission = null;
   try {
     setUploadProgress(period, 2, "Preparing secure upload...");
     if (backendConnected) {
@@ -1479,7 +1485,7 @@ async function submitUpload(period) {
         setUploadProgress(period, percent, label);
       });
       setUploadProgress(period, 99, "Finalising practice check-in...");
-      const submission = await apiRequest("/api/student/me/practice-submissions", {
+      createdSubmission = await apiRequest("/api/student/me/practice-submissions", {
         method: "POST",
         body: JSON.stringify({
           period,
@@ -1489,20 +1495,36 @@ async function submitUpload(period) {
           storageMode: uploadedVideo.storageMode || "metadata-only-mvp"
         })
       });
-      backendWarning = uploadedVideo.warning || submission.warning || "";
+      backendWarning = uploadedVideo.warning || createdSubmission.warning || "";
     }
 
     setUploadProgress(period, 100, "Practice submitted.");
-    const now = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date());
+    const uploadedAt = createdSubmission?.uploadedAt || new Date().toISOString();
+    const historySubmission = {
+      id: createdSubmission?.id || `local-${Date.now()}`,
+      period: createdSubmission?.period || period,
+      duration_seconds: Number(createdSubmission?.durationSeconds || state.checkins[period].durationSeconds || 0),
+      file_name: createdSubmission?.fileName || state.checkins[period].fileName || `${period}-practice.mp4`,
+      uploaded_at: uploadedAt,
+      review_status: createdSubmission?.reviewStatus || "pending"
+    };
+    const now = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date(uploadedAt));
     state.checkins[period].status = "submitted";
     state.checkins[period].time = now;
+    state.checkins[period].id = historySubmission.id;
+    state.checkins[period].uploadedAt = uploadedAt;
+    state.recentSubmissions = [
+      historySubmission,
+      ...state.recentSubmissions.filter((submission) => String(submission.id) !== String(historySubmission.id))
+    ].slice(0, 14);
     state.streak = Math.max(state.streak, 7);
     saveState();
+    renderHistory();
     button.hidden = true;
     if (temporaryVideoUrls[period]) URL.revokeObjectURL(temporaryVideoUrls[period]);
     delete temporaryVideoUrls[period];
     delete selectedPracticeFiles[period];
-    await syncStudentFromBackend();
+    await syncStudentFromBackend({ keepRecentSubmission: historySubmission });
     clearUploadProgress(period);
     showToast(backendWarning || `Daily check-in submitted. Your teacher will review it before ${expectedReviewCopy()}.`);
     celebrateCompletedTask("Daily mission complete! Your practice streak is growing.");
